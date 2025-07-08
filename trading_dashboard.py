@@ -62,15 +62,16 @@ while True:
                 st.error(f"Not enough data for {ticker}. Try a different ticker or wait for market hours.")
                 continue
 
-            # Filter to regular market hours (9:30 AM to 4:00 PM) and weekdays (Mon-Fri)
-           data.index = data.index.tz_convert('US/Eastern')  # Ensure timezone consistency
-data = data.between_time("09:30", "16:00")        # Keep only market hours
+            # Ensure timezone consistency
+            data.index = data.index.tz_convert('US/Eastern')
 
+            # Filter to regular market hours (9:30 AM to 4:00 PM) and weekdays
+            data = data.between_time("09:30", "16:00")
 
-            # --- Zoom in on last 2 days ---
+            # Zoom in on last 2 days
             data = data[data.index > (data.index[-1] - pd.Timedelta(days=2))]
 
-            # --- Indicators ---
+            # Indicators
             data['20_MA'] = data['Close'].rolling(window=20).mean()
             data['50_MA'] = data['Close'].rolling(window=50).mean()
             data['High_Break'] = data['High'].rolling(window=20).max()
@@ -78,7 +79,7 @@ data = data.between_time("09:30", "16:00")        # Keep only market hours
             data['Volume_Surge'] = data['Volume'] > data['Volume'].rolling(window=20).mean() * 1.5
             data['Momentum'] = data['Close'].pct_change().rolling(window=10).sum()
 
-            # --- Signal Logic ---
+            # Signal Logic
             signal = ""
             trade_flag = False
             rank_value = 0
@@ -115,24 +116,20 @@ data = data.between_time("09:30", "16:00")        # Keep only market hours
             if use_ai_watchlist:
                 index_prices.append(data['Close'].iloc[-1])
 
-            # --- Display Signal ---
             if trade_flag:
                 ranked_signals.append((ticker, signal, rank_value))
                 signal_leaderboard[ticker] += 1
                 play_alert()
 
-            # --- VWAP calculation ---
             typical_price = (data['High'] + data['Low'] + data['Close']) / 3
             data['VWAP'] = (typical_price * data['Volume']).cumsum() / data['Volume'].cumsum()
 
-            # --- RSI calculation ---
             delta = data['Close'].diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
             rs = gain / loss
             data['RSI'] = 100 - (100 / (1 + rs))
 
-            # --- Candlestick Chart ---
             fig = go.Figure(data=[go.Candlestick(
                 x=data.index,
                 open=data['Open'],
@@ -159,20 +156,17 @@ data = data.between_time("09:30", "16:00")        # Keep only market hours
             fig.update_layout(title=f"{ticker} Price Chart", xaxis_title="Time", yaxis_title="Price")
             st.plotly_chart(fig)
 
-            # --- RSI Chart ---
             rsi_fig = go.Figure()
             rsi_fig.add_trace(go.Scatter(x=data.index, y=data['RSI'], mode='lines', name='RSI'))
             rsi_fig.update_layout(title=f"{ticker} RSI (14)", xaxis_title="Time", yaxis_title="RSI")
             rsi_fig.update_yaxes(range=[0, 100])
             st.plotly_chart(rsi_fig)
 
-        # --- AI Sector Index ---
         if use_ai_watchlist and index_prices:
             avg_price = sum(index_prices) / len(index_prices)
             color = 'green' if avg_price >= index_prices[-2] else 'red'
             st.markdown(f"<h3 style='color:{color};'>AI Sector Index Avg Price: ${avg_price:.2f}</h3>", unsafe_allow_html=True)
 
-        # --- Leaderboard ---
         if signal_leaderboard:
             leaderboard_df = pd.DataFrame(sorted(signal_leaderboard.items(), key=lambda x: x[1], reverse=True), columns=['Ticker', 'Signal Count'])
             st.markdown("### \U0001F3C6 AI Signal Leaderboard")
