@@ -9,7 +9,7 @@ import time
 # --- AI Watchlist ---
 AI_TICKERS = [
     "NVDA", "MSFT", "GOOGL", "AMZN", "META", "TSLA",
-    "PLTR", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP", "TSM", "CRWV"
+    "PLTR", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP", "TSM", "CRWV", "DDOG"
 ]
 
 # --- Leaderboard History ---
