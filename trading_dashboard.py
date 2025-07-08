@@ -95,22 +95,38 @@ while True:
                 ranked_signals.append((ticker, signal, rank_value))
                 signal_leaderboard[ticker] += 1
 
-        # --- Rank and Display Top Trade Signals ---
-        if ranked_signals:
-            sorted_signals = sorted(ranked_signals, key=lambda x: x[2], reverse=True)
-            for ticker, signal, rank in sorted_signals:
-                st.markdown(f"<h2 style='color:limegreen;'>✅ TRADE SIGNAL: {ticker}</h2>", unsafe_allow_html=True)
-                st.success(signal)
-                # Sound Alert: plays only once per trade signal batch
-                sound_file = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA="
-                st.markdown(f"<audio autoplay><source src='{sound_file}' type='audio/wav'></audio>", unsafe_allow_html=True)
-        else:
-            st.info("No clear signals found for any ticker.")
+            # --- Plot chart ---
+            # VWAP calculation
+            typical_price = (data['High'] + data['Low'] + data['Close']) / 3
+            data['VWAP'] = (typical_price * data['Volume']).cumsum() / data['Volume'].cumsum()
+
+            # RSI calculation
+            delta = data['Close'].diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            rs = gain / loss
+            data['RSI'] = 100 - (100 / (1 + rs))
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=data.index, y=data['Close'], mode='lines', name='Close'))
+            fig.add_trace(go.Scatter(x=data.index, y=data['20_MA'], mode='lines', name='20 MA'))
+            fig.add_trace(go.Scatter(x=data.index, y=data['50_MA'], mode='lines', name='50 MA'))
+            fig.add_trace(go.Scatter(x=data.index, y=data['VWAP'], mode='lines', name='VWAP'))
+            fig.update_layout(title=f"{ticker} Price Chart", xaxis_title="Time", yaxis_title="Price")
+            st.plotly_chart(fig)
+
+            # --- RSI Chart ---
+            rsi_fig = go.Figure()
+            rsi_fig.add_trace(go.Scatter(x=data.index, y=data['RSI'], mode='lines', name='RSI'))
+            rsi_fig.update_layout(title=f"{ticker} RSI (14)", xaxis_title="Time", yaxis_title="RSI")
+            rsi_fig.update_yaxes(range=[0, 100])
+            st.plotly_chart(rsi_fig)
 
         # --- AI Sector Index ---
         if use_ai_watchlist and index_prices:
             avg_price = sum(index_prices) / len(index_prices)
-            st.markdown("### AI Sector Index Avg Price: $" + format(avg_price, ".2f"))
+            color = 'green' if avg_price >= index_prices[-2] else 'red'
+st.markdown(f"<h3 style='color:{color};'>AI Sector Index Avg Price: ${avg_price:.2f}</h3>", unsafe_allow_html=True)
 
         # --- Leaderboard ---
         if signal_leaderboard:
