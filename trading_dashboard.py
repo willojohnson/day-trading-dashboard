@@ -5,6 +5,7 @@ import datetime
 import plotly.graph_objs as go
 import base64
 import time
+import os
 
 # --- AI Watchlist ---
 AI_TICKERS = [
@@ -23,6 +24,22 @@ strategy = st.sidebar.selectbox("Select Strategy", ["Breakout", "Scalping", "Tre
 use_ai_watchlist = st.sidebar.checkbox("Use AI Company Watchlist", value=False)
 ticker_input = st.sidebar.text_input("Enter Ticker Symbol (comma-separated)", value="AAPL")
 refresh_rate = st.sidebar.slider("Refresh every N seconds", 30, 300, 60, step=10)
+
+# Sound alert function
+def play_alert():
+    sound_file_path = "alert.mp3"
+    if os.path.exists(sound_file_path):
+        b64_sound = base64.b64encode(open(sound_file_path, "rb").read()).decode()
+        sound_html = f"""
+            <audio autoplay>
+                <source src="data:audio/mp3;base64,{b64_sound}" type="audio/mp3">
+            </audio>"""
+        st.markdown(sound_html, unsafe_allow_html=True)
+
+# Add a dummy sound file for Streamlit Cloud use
+with open("alert.mp3", "wb") as f:
+    f.write(b"ID3\x03\x00\x00\x00\x00\x00\x21TIT2\x00\x00\x00\x07\x00\x00\x03Beep\x00\x00")
+
 
 tickers = AI_TICKERS if use_ai_watchlist else [t.strip().upper() for t in ticker_input.split(",") if t.strip()]
 
@@ -45,8 +62,11 @@ while True:
                 st.error(f"Not enough data for {ticker}. Try a different ticker or wait for market hours.")
                 continue
 
-            # Filter to regular market hours (9:30 AM to 4:00 PM)
+            # Filter to regular market hours (9:30 AM to 4:00 PM) and weekdays (Mon-Fri)
             data = data.between_time("09:30", "16:00")
+            data = data[data.index.dayofweek < 5]
+            data = data[~data.index.duplicated(keep='first')]
+            data = data.sort_index()
 
             # --- Zoom in on last 2 days ---
             data = data[data.index > (data.index[-1] - pd.Timedelta(days=2))]
@@ -100,6 +120,7 @@ while True:
             if trade_flag:
                 ranked_signals.append((ticker, signal, rank_value))
                 signal_leaderboard[ticker] += 1
+                play_alert()
 
             # --- VWAP calculation ---
             typical_price = (data['High'] + data['Low'] + data['Close']) / 3
