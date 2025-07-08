@@ -63,10 +63,9 @@ while True:
                 continue
 
             # Filter to regular market hours (9:30 AM to 4:00 PM) and weekdays (Mon-Fri)
-            data = data.between_time("09:30", "16:00")
-            data = data[data.index.dayofweek < 5]
-            data = data[~data.index.duplicated(keep='first')]
-            data = data.sort_index()
+           data.index = data.index.tz_convert('US/Eastern')  # Ensure timezone consistency
+data = data.between_time("09:30", "16:00")        # Keep only market hours
+
 
             # --- Zoom in on last 2 days ---
             data = data[data.index > (data.index[-1] - pd.Timedelta(days=2))]
