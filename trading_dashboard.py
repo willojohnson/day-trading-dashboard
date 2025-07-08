@@ -9,7 +9,7 @@ import time
 # --- AI Watchlist ---
 AI_TICKERS = [
     "NVDA", "MSFT", "GOOGL", "AMZN", "META", "TSLA",
-    "PLTR", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP", "TSM", "CRWV", "DDOG"
+    "PLTR", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP", "TSM", "CRWV"
 ]
 
 # --- Leaderboard History ---
@@ -126,12 +126,12 @@ while True:
         if use_ai_watchlist and index_prices:
             avg_price = sum(index_prices) / len(index_prices)
             color = 'green' if avg_price >= index_prices[-2] else 'red'
-st.markdown(f"<h3 style='color:{color};'>AI Sector Index Avg Price: ${avg_price:.2f}</h3>", unsafe_allow_html=True)
+            st.markdown(f"<h3 style='color:{color};'>AI Sector Index Avg Price: ${avg_price:.2f}</h3>", unsafe_allow_html=True)
 
         # --- Leaderboard ---
         if signal_leaderboard:
             leaderboard_df = pd.DataFrame(sorted(signal_leaderboard.items(), key=lambda x: x[1], reverse=True), columns=['Ticker', 'Signal Count'])
-            st.markdown("### 🏆 AI Signal Leaderboard")
+            st.markdown("### \U0001F3C6 AI Signal Leaderboard")
             st.dataframe(leaderboard_df)
 
     time.sleep(refresh_rate)
