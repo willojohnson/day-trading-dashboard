@@ -9,7 +9,7 @@ import time
 # --- AI Watchlist ---
 AI_TICKERS = [
     "NVDA", "MSFT", "GOOGL", "AMZN", "META", "TSLA",
-    "PLTR", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP", "TSM", "CRWV"
+    "PLTR", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP", "TSM", "CRWV", "DDOG"
 ]
 
 # --- Leaderboard History ---
@@ -44,6 +44,9 @@ while True:
             if data.empty or len(data) < 50:
                 st.error(f"Not enough data for {ticker}. Try a different ticker or wait for market hours.")
                 continue
+
+            # Filter to regular market hours (9:30 AM to 4:00 PM)
+            data = data.between_time("09:30", "16:00")
 
             # --- Zoom in on last 2 days ---
             data = data[data.index > (data.index[-1] - pd.Timedelta(days=2))]
