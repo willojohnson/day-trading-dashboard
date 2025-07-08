@@ -6,13 +6,25 @@ import plotly.graph_objs as go
 import base64
 import time
 
+# --- AI Watchlist ---
+AI_TICKERS = [
+    "NVDA", "MSFT", "GOOGL", "AMZN", "META", "TSLA",
+    "PLTR", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP"
+]
+
+# --- Leaderboard History ---
+from collections import defaultdict
+signal_leaderboard = defaultdict(int)
+
 # --- UI ---
 st.set_page_config(layout="wide")
 st.title("\U0001F4C8 Day Trading Dashboard")
 strategy = st.sidebar.selectbox("Select Strategy", ["Breakout", "Scalping", "Trend Trading"])
+use_ai_watchlist = st.sidebar.checkbox("Use AI Company Watchlist", value=False)
 ticker_input = st.sidebar.text_input("Enter Ticker Symbol (comma-separated)", value="AAPL")
-tickers = [t.strip().upper() for t in ticker_input.split(",") if t.strip()]
 refresh_rate = st.sidebar.slider("Refresh every N seconds", 30, 300, 60, step=10)
+
+tickers = AI_TICKERS if use_ai_watchlist else [t.strip().upper() for t in ticker_input.split(",") if t.strip()]
 
 placeholder = st.empty()
 
@@ -22,6 +34,7 @@ while True:
         start_date = now - datetime.timedelta(days=5)
         end_date = now
         ranked_signals = []
+        index_prices = []
 
         for ticker in tickers:
             st.subheader(f"Loading data for {ticker}...")
@@ -74,9 +87,13 @@ while True:
             except Exception as e:
                 st.warning(f"Signal calculation error for {ticker}: {e}")
 
+            if use_ai_watchlist:
+                index_prices.append(data['Close'].iloc[-1])
+
             # --- Display Signal ---
             if trade_flag:
                 ranked_signals.append((ticker, signal, rank_value))
+                signal_leaderboard[ticker] += 1
 
         # --- Rank and Display Top Trade Signals ---
         if ranked_signals:
@@ -87,9 +104,19 @@ while True:
                 # Sound Alert: plays only once per trade signal batch
                 sound_file = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA="
                 st.markdown(f"<audio autoplay><source src='{sound_file}' type='audio/wav'></audio>", unsafe_allow_html=True)
-
         else:
             st.info("No clear signals found for any ticker.")
+
+        # --- AI Sector Index ---
+        if use_ai_watchlist and index_prices:
+            avg_price = sum(index_prices) / len(index_prices)
+            st.markdown(f"### 📊 AI Sector Index Avg Price: ${avg_price:.2f}")
+
+        # --- Leaderboard ---
+        if signal_leaderboard:
+            leaderboard_df = pd.DataFrame(sorted(signal_leaderboard.items(), key=lambda x: x[1], reverse=True), columns=['Ticker', 'Signal Count'])
+            st.markdown("### 🏆 AI Signal Leaderboard")
+            st.dataframe(leaderboard_df)
 
     time.sleep(refresh_rate)
     placeholder.empty()
