@@ -110,7 +110,7 @@ while True:
         # --- AI Sector Index ---
         if use_ai_watchlist and index_prices:
             avg_price = sum(index_prices) / len(index_prices)
-            st.markdown(f"### 📊 AI Sector Index Avg Price: ${avg_price:.2f}")
+            st.markdown(f"### 📊 AI Sector Index Avg Price: \${avg_price:.2f}")
 
         # --- Leaderboard ---
         if signal_leaderboard:
