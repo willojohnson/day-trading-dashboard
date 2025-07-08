@@ -45,6 +45,9 @@ while True:
                 st.error(f"Not enough data for {ticker}. Try a different ticker or wait for market hours.")
                 continue
 
+            # --- Zoom in on last 2 days ---
+            data = data[data.index > (data.index[-1] - pd.Timedelta(days=2))]
+
             # --- Indicators ---
             data['20_MA'] = data['Close'].rolling(window=20).mean()
             data['50_MA'] = data['Close'].rolling(window=50).mean()
@@ -95,23 +98,41 @@ while True:
                 ranked_signals.append((ticker, signal, rank_value))
                 signal_leaderboard[ticker] += 1
 
-            # --- Plot chart ---
-            # VWAP calculation
+            # --- VWAP calculation ---
             typical_price = (data['High'] + data['Low'] + data['Close']) / 3
             data['VWAP'] = (typical_price * data['Volume']).cumsum() / data['Volume'].cumsum()
 
-            # RSI calculation
+            # --- RSI calculation ---
             delta = data['Close'].diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
             rs = gain / loss
             data['RSI'] = 100 - (100 / (1 + rs))
 
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=data.index, y=data['Close'], mode='lines', name='Close'))
+            # --- Candlestick Chart ---
+            fig = go.Figure(data=[go.Candlestick(
+                x=data.index,
+                open=data['Open'],
+                high=data['High'],
+                low=data['Low'],
+                close=data['Close'],
+                name='Candlestick'
+            )])
             fig.add_trace(go.Scatter(x=data.index, y=data['20_MA'], mode='lines', name='20 MA'))
             fig.add_trace(go.Scatter(x=data.index, y=data['50_MA'], mode='lines', name='50 MA'))
             fig.add_trace(go.Scatter(x=data.index, y=data['VWAP'], mode='lines', name='VWAP'))
+
+            if trade_flag:
+                fig.add_trace(go.Scatter(
+                    x=[data.index[-1]],
+                    y=[data['Close'].iloc[-1]],
+                    mode='markers+text',
+                    marker=dict(size=12, color='red'),
+                    text=['⬆ Signal'],
+                    textposition='top center',
+                    name='Trade Signal'
+                ))
+
             fig.update_layout(title=f"{ticker} Price Chart", xaxis_title="Time", yaxis_title="Price")
             st.plotly_chart(fig)
 
