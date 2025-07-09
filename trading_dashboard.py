@@ -51,8 +51,8 @@ with placeholder.container():
     for ticker in TICKERS:
         st.subheader(f"Loading data for {ticker}...")
         data = yf.download(ticker, start=start_date, end=end_date, interval="5m")
-        if data.empty or len(data) < 50:
-            st.error(f"Not enough data for {ticker}.")
+        if data.empty or len(data) < 50 or 'Close' not in data.columns:
+            st.error(f"Not enough or invalid data for {ticker}.")
             continue
 
         data.index = data.index.tz_localize(None)
