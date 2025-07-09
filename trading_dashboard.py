@@ -5,7 +5,6 @@ import datetime
 import base64
 import os
 from collections import defaultdict
-from streamlit_autorefresh import st_autorefresh
 
 # --- AI Watchlist ---
 TICKERS = [
@@ -21,9 +20,6 @@ st.set_page_config(layout="wide")
 st.title("\U0001F4C8 Day Trading Dashboard")
 strategy = st.sidebar.selectbox("Select Strategy", ["Breakout", "Scalping", "Trend Trading"])
 refresh_rate = st.sidebar.slider("Refresh every N seconds", 30, 300, 60, step=10)
-
-# Enable auto-refresh
-st_autorefresh(interval=refresh_rate * 1000, key="datarefresh")
 
 # Manual Refresh Button
 if st.sidebar.button("Refresh Now"):
