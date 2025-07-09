@@ -5,6 +5,7 @@ import datetime
 import base64
 import os
 from collections import defaultdict
+from streamlit_autorefresh import st_autorefresh
 
 # --- AI Watchlist ---
 TICKERS = [
@@ -21,9 +22,12 @@ st.title("\U0001F4C8 Day Trading Dashboard")
 strategy = st.sidebar.selectbox("Select Strategy", ["Breakout", "Scalping", "Trend Trading"])
 refresh_rate = st.sidebar.slider("Refresh every N seconds", 30, 300, 60, step=10)
 
+# Enable auto-refresh
+st_autorefresh(interval=refresh_rate * 1000, key="datarefresh")
+
 # Manual Refresh Button
 if st.sidebar.button("Refresh Now"):
-    st.experimental_rerun()
+    st.rerun()
 
 # Sound alert function
 def play_alert():
@@ -56,6 +60,9 @@ with placeholder.container():
             continue
 
         data.index = data.index.tz_localize(None)
+        market_open = data.between_time("09:30", "16:00")
+        data = market_open.copy()
+
         data['20_MA'] = data['Close'].rolling(window=20).mean()
         data['50_MA'] = data['Close'].rolling(window=50).mean()
         data['High_Break'] = data['High'].rolling(window=20).max()
