@@ -111,11 +111,12 @@ with placeholder.container():
 
         # --- VWAP Calculation: robust against length mismatch ---
         if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
-        data['Typical_Price'] = (data['High'] + data['Low'] + data['Close']) / 3
-        data['TPxV'] = (data['Typical_Price'] * data['Volume']).reindex(data.index)
-        vwap_numerator = data['TPxV'].cumsum().reindex(data.index)
-        vwap_denominator = data['Volume'].cumsum().replace(0, 1e-9).reindex(data.index)
-        data['VWAP'] = (vwap_numerator / vwap_denominator).reindex(data.index)
+            data['Typical_Price'] = (data['High'] + data['Low'] + data['Close']) / 3
+            data['TPxV'] = (data['Typical_Price'] * data['Volume']).reindex(data.index)
+            vwap_numerator = data['TPxV'].cumsum().reindex(data.index)
+            vwap_denominator = data['Volume'].cumsum().replace(0,
+    1e-9).reindex(data.index)
+            data['VWAP'] = (vwap_numerator / vwap_denominator).reindex(data.index)
 
         signal = ""
         trade_flag = False
