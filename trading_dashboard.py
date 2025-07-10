@@ -86,7 +86,7 @@ for ticker in TICKERS:
 
         if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
             data['Typical_Price'] = (data['High'] + data['Low'] + data['Close']) / 3
-            data['TPxV'] = data['Typical_Price'] * data['Volume']
+            data['TPxV'] = data['Typical_Price'].fillna(0) * data['Volume'].fillna(0)
             data['VWAP'] = data['TPxV'].cumsum() / data['Volume'].cumsum()
         else:
             st.warning(f"{ticker}: Required columns missing for VWAP calculation.")
