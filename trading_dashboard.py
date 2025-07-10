@@ -84,13 +84,20 @@ for ticker in TICKERS:
         data['Volume_Surge'] = data['Volume'] > data['Volume'].rolling(window=20).mean() * 1.5
         data['Momentum'] = data['Close'].pct_change().rolling(window=10).sum()
 
-        if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
-            data['Typical_Price'] = (data['High'] + data['Low'] + data['Close']) / 3
-            data['TPxV'] = data['Typical_Price'].fillna(0) * data['Volume'].fillna(0)
-            data['VWAP'] = data['TPxV'].cumsum() / data['Volume'].cumsum()
-        else:
-            st.warning(f"{ticker}: Required columns missing for VWAP calculation.")
-            continue
+if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
+    # Step 1: Calculate Typical Price
+    data['Typical_Price'] = (
+        data['High'].fillna(0) + data['Low'].fillna(0) + data['Close'].fillna(0)
+    ) / 3
+
+    # Step 2: Calculate TPxV
+    data['TPxV'] = data['Typical_Price'] * data['Volume'].fillna(0)
+
+    # Step 3: Calculate VWAP
+    data['VWAP'] = data['TPxV'].cumsum() / data['Volume'].fillna(0).cumsum()
+else:
+    st.warning(f"{ticker}: Required columns missing for VWAP calculation.")
+    continue
 
     # Signal logic
     signal = ""
