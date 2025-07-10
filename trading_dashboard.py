@@ -96,33 +96,35 @@ signal = ""
 trade_flag = False
 rank_value = 0
 
-        try:
-            if strategy == "Breakout":
-                recent_high = data['High_Break'].iloc[-1].item()
-                current_close = data['Close'].iloc[-1].item()
-                if pd.notna(recent_high) and pd.notna(current_close) and current_close > recent_high:
-                    signal = f"\U0001F514 Breakout: {ticker} above ${recent_high:.2f}"
-                    trade_flag = True
-                    rank_value = data['Momentum'].iloc[-1].item()
+try:
+    if strategy == "Breakout":
+        recent_high = data['High_Break'].iloc[-1].item()
+        current_close = data['Close'].iloc[-1].item()
+        if pd.notna(recent_high) and pd.notna(current_close) and current_close > recent_high:
+            signal = f"\U0001F514 Breakout: {ticker} above ${recent_high:.2f}"
+            trade_flag = True
+            rank_value = data['Momentum'].iloc[-1].item()
+            
+    elif strategy == "Scalping":
+        ma_20 = data['20_MA'].iloc[-1].item()
+        ma_50 = data['50_MA'].iloc[-1].item()
+        volume_surge = bool(data['Volume_Surge'].iloc[-1])
+        if pd.notna(ma_20) and pd.notna(ma_50) and volume_surge and ma_20 > ma_50:
+            signal = f"⚡ Scalping: {ticker} volume surge & 20MA > 50MA"
+            trade_flag = True
+            rank_value = data['Volume'].iloc[-1].item()
 
-            elif strategy == "Scalping":
-                ma_20 = data['20_MA'].iloc[-1].item()
-                ma_50 = data['50_MA'].iloc[-1].item()
-                volume_surge = bool(data['Volume_Surge'].iloc[-1])
-                if pd.notna(ma_20) and pd.notna(ma_50) and volume_surge and ma_20 > ma_50:
-                    signal = f"⚡ Scalping: {ticker} volume surge & 20MA > 50MA"
-                    trade_flag = True
-                    rank_value = data['Volume'].iloc[-1].item()
+    elif strategy == "Trend Trading":
+        ma_20 = data['20_MA'].iloc[-1].item()
+        ma_50 = data['50_MA'].iloc[-1].item()
+        if pd.notna(ma_20) and pd.notna(ma_50) and ma_20 > ma_50:
+            signal = f"\U0001F4C8 Trend: {ticker} in uptrend (20MA > 50MA)"
+            trade_flag = True
+            rank_value = data['Momentum'].iloc[-1].item()
 
-            elif strategy == "Trend Trading":
-                ma_20 = data['20_MA'].iloc[-1].item()
-                ma_50 = data['50_MA'].iloc[-1].item()
-                if pd.notna(ma_20) and pd.notna(ma_50) and ma_20 > ma_50:
-                    signal = f"\U0001F4C8 Trend: {ticker} in uptrend (20MA > 50MA)"
-                    trade_flag = True
-                    rank_value = data['Momentum'].iloc[-1].item()
-        except Exception as e:
-            st.warning(f"Error processing {ticker}: {e}")
+except Exception as e:
+    st.warning(f"Error processing {ticker}: {e}")
+
 
         if trade_flag:
             ranked_signals.append((ticker, signal, rank_value))
