@@ -23,10 +23,6 @@ strategy = st.sidebar.selectbox("Select Strategy", ["Breakout", "Scalping", "Tre
 refresh_rate = st.sidebar.slider("Refresh every N seconds", 30, 300, 60, step=10)
 st_autorefresh(interval=refresh_rate * 1000, key="datarefresh")
 
-# Display Last Updated Timestamp
-last_updated = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-st.sidebar.markdown("<p style='margin-top: -10px;'>\U0001F552 <b>Last Updated:</b> " + last_updated + " EST</p>", unsafe_allow_html=True)
-
 # Strategy Definitions – Always Visible
 st.sidebar.markdown("### \U0001F4D8 Strategy Definitions")
 st.sidebar.markdown("""
@@ -90,7 +86,7 @@ with placeholder.container():
             data['Typical_Price'] = (
                 data['High'].fillna(0) + data['Low'].fillna(0) + data['Close'].fillna(0)
             ) / 3
-            data['TPxV'] = (data['Typical_Price'].astype(float).fillna(0)) * (data['Volume'].astype(float).fillna(0))
+            data['TPxV'] = data['Typical_Price'].fillna(0) * data['Volume'].fillna(0)
             data['VWAP'] = data['TPxV'].cumsum() / data['Volume'].fillna(0).cumsum()
 
         signal = ""
@@ -156,4 +152,3 @@ try:
     )
 except:
     st.warning("Script download not available in this environment.")
-    
