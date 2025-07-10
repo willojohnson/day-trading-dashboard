@@ -22,7 +22,14 @@ st.set_page_config(layout="wide")
 st.title("\U0001F4C8 Day Trading Dashboard")
 strategy = st.sidebar.selectbox("Select Strategy", ["Breakout", "Scalping", "Trend Trading"])
 refresh_rate = st.sidebar.slider("Refresh every N seconds", 30, 300, 60, step=10)
+
+# Auto Refresh and Timestamp
 st_autorefresh(interval=refresh_rate * 1000, key="datarefresh")
+
+# Display Last Updated Timestamp
+last_updated = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+st.sidebar.markdown(f"🕒 **Last Updated:** {last_updated} EST")
+
 
 if st.sidebar.button("🔁 Refresh Now"):
     st.rerun()
