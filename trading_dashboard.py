@@ -135,7 +135,7 @@ with placeholder.container():
             st.success(signal)
 
 def display_ranked_signals(ranked_signals):
-if ranked_signals:
+    if ranked_signals:
 st.markdown("### \U0001F4CA Real-Time Signals")
 ranked_signals.sort(key=lambda x: x[2], reverse=True)
 for ticker, signal, rank in ranked_signals:
