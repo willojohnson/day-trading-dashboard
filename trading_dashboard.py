@@ -101,7 +101,7 @@ with placeholder.container():
             st.error(f"Not enough or invalid data for {ticker} after market hours filter.")
             continue
 
-        # Technical indicators (all on filtered data)
+        # All calculations and assignments must use the filtered DataFrame only!
         data['20_MA'] = data['Close'].rolling(window=20).mean()
         data['50_MA'] = data['Close'].rolling(window=50).mean()
         data['High_Break'] = data['High'].rolling(window=20).max()
@@ -109,14 +109,15 @@ with placeholder.container():
         data['Volume_Surge'] = data['Volume'] > data['Volume'].rolling(window=20).mean() * 1.5
         data['Momentum'] = data['Close'].pct_change().rolling(window=10).sum()
 
-        # --- VWAP Calculation (robust and 1D) ---
+        # --- VWAP Calculation: always use .reindex(data.index) to guarantee alignment ---
         if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
-            # Typical Price
-            data['Typical_Price'] = (data['High'] + data['Low'] + data['Close']) / 3
-            # TPxV
-            data['TPxV'] = data['Typical_Price'] * data['Volume']
-            # VWAP
-            data['VWAP'] = data['TPxV'].cumsum() / data['Volume'].cumsum().replace(0, 1e-9)
+            typical_price = (data['High'] + data['Low'] + data['Close']) / 3
+            typical_price = typical_price.reindex(data.index)
+            volume = data['Volume'].reindex(data.index)
+            data['Typical_Price'] = typical_price
+            data['TPxV'] = (typical_price * volume).reindex(data.index)
+            vwap_denominator = volume.cumsum().replace(0, 1e-9)
+            data['VWAP'] = (data['TPxV'].cumsum() / vwap_denominator).reindex(data.index)
 
         signal = ""
         trade_flag = False
