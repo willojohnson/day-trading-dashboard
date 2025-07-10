@@ -68,69 +68,49 @@ for ticker in TICKERS:
     st.subheader(f"Loading data for {ticker}...")
     data = yf.download(ticker, start=start_date, end=end_date, interval="5m")
 
-    if data.empty or len(data) < 50 or 'Close' not in data.columns:
-        st.error(f"Not enough or invalid data for {ticker}.")
+    # … your earlier checks …
+
+    # VWAP calculation block
+    if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
+        data['Typical_Price'] = (
+            data['High'].fillna(0)
+            + data['Low'].fillna(0)
+            + data['Close'].fillna(0)
+        ) / 3
+        data['TPxV'] = data['Typical_Price'] * data['Volume'].fillna(0)
+        data['VWAP'] = data['TPxV'].cumsum() / data['Volume'].fillna(0).cumsum()
+    else:
+        st.warning(f"{ticker}: Required columns missing for VWAP calculation.")
         continue
 
-    data.index = data.index.tz_localize(None)
-    market_open = data.between_time("09:30", "16:00")
-    data = market_open.copy()
+    # Signal initialization (still under the for-loop)
+    signal = ""
+    trade_flag = False
+    rank_value = 0
 
-    if 'Close' in data.columns and len(data['Close'].dropna()) >= 20:
-        data['20_MA'] = data['Close'].rolling(window=20).mean()
-        data['50_MA'] = data['Close'].rolling(window=50).mean()
-        data['High_Break'] = data['High'].rolling(window=20).max()
-        data['Low_Break'] = data['Low'].rolling(window=20).min()
-        data['Volume_Surge'] = data['Volume'] > data['Volume'].rolling(window=20).mean() * 1.5
-        data['Momentum'] = data['Close'].pct_change().rolling(window=10).sum()
-
-if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
-    # Step 1: Calculate Typical Price
-    data['Typical_Price'] = (
-        data['High'].fillna(0) + data['Low'].fillna(0) + data['Close'].fillna(0)
-    ) / 3
-
-    # Step 2: Calculate TPxV
-    data['TPxV'] = data['Typical_Price'] * data['Volume'].fillna(0)
-
-    # Step 3: Calculate VWAP
-    data['VWAP'] = (
-        data['TPxV'].cumsum() /
-        data['Volume'].fillna(0).cumsum()
-    )
-
-else:
-    st.warning(f"{ticker}: Required columns missing for VWAP calculation.")
-    continue  # still inside the for-loop
-
-
-# Signal logic (still inside the for-loop)
-signal = ""
-trade_flag = False
-rank_value = 0
-
+    # Strategy logic inside try/except
     try:
         if strategy == "Breakout":
-            recent_high = data['High_Break'].iloc[-1]
+            recent_high   = data['High_Break'].iloc[-1]
             current_close = data['Close'].iloc[-1]
-            current_vwap = data['VWAP'].iloc[-1]
+            current_vwap  = data['VWAP'].iloc[-1]
             if (
-                pd.notna(recent_high) and
-                pd.notna(current_close) and
-                pd.notna(current_vwap) and
-                current_close > recent_high and
-                current_close > current_vwap
+                pd.notna(recent_high)
+                and pd.notna(current_close)
+                and pd.notna(current_vwap)
+                and current_close > recent_high
+                and current_close > current_vwap
             ):
-                signal = f"🔔 Breakout: {ticker} above ${recent_high:.2f} & VWAP"
+                signal     = f"🔔 Breakout: {ticker} above ${recent_high:.2f} & VWAP"
                 trade_flag = True
                 rank_value = data['Momentum'].iloc[-1]
 
         elif strategy == "Scalping":
-            ma_20 = data['20_MA'].iloc[-1]
-            ma_50 = data['50_MA'].iloc[-1]
-            volume_surge = bool(data['Volume_Surge'].iloc[-1])
+            ma_20         = data['20_MA'].iloc[-1]
+            ma_50         = data['50_MA'].iloc[-1]
+            volume_surge  = bool(data['Volume_Surge'].iloc[-1])
             if pd.notna(ma_20) and pd.notna(ma_50) and volume_surge and ma_20 > ma_50:
-                signal = f"⚡ Scalping: {ticker} volume surge & 20MA > 50MA"
+                signal     = f"⚡ Scalping: {ticker} volume surge & 20MA > 50MA"
                 trade_flag = True
                 rank_value = data['Volume'].iloc[-1]
 
@@ -138,12 +118,15 @@ rank_value = 0
             ma_20 = data['20_MA'].iloc[-1]
             ma_50 = data['50_MA'].iloc[-1]
             if pd.notna(ma_20) and pd.notna(ma_50) and ma_20 > ma_50:
-                signal = f"📈 Trend: {ticker} in uptrend (20MA > 50MA)"
+                signal     = f"📈 Trend: {ticker} in uptrend (20MA > 50MA)"
                 trade_flag = True
                 rank_value = data['Momentum'].iloc[-1]
 
     except Exception as e:
         st.warning(f"Error processing {ticker}: {e}")
+
+    # …rest of your logic…
+
 
     if trade_flag:
         ranked_signals.append((ticker, signal, rank_value))
