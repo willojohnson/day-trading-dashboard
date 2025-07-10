@@ -95,11 +95,11 @@ if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
 
     # Step 3: Calculate VWAP
     data['VWAP'] = data['TPxV'].cumsum() / data['Volume'].fillna(0).cumsum()
-else:
-    st.warning(f"{ticker}: Required columns missing for VWAP calculation.")
-continue
+    else:
+        st.warning(f"{ticker}: Required columns missing for VWAP calculation.")
+        continue  # ← indented under else
 
-    # Signal logic
+    # Signal logic  ← same 4-space indent as the above blocks
     signal = ""
     trade_flag = False
     rank_value = 0
