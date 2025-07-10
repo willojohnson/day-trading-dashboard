@@ -24,6 +24,9 @@ strategy = st.sidebar.selectbox("Select Strategy", ["Breakout", "Scalping", "Tre
 refresh_rate = st.sidebar.slider("Refresh every N seconds", 30, 300, 60, step=10)
 st_autorefresh(interval=refresh_rate * 1000, key="datarefresh")
 
+if st.sidebar.button("🔁 Refresh Now"):
+    st.rerun()
+
 # Strategy Definitions – Always Visible
 st.sidebar.markdown("### 📘 Strategy Definitions")
 st.sidebar.markdown("""
