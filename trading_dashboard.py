@@ -94,16 +94,20 @@ if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
     data['TPxV'] = data['Typical_Price'] * data['Volume'].fillna(0)
 
     # Step 3: Calculate VWAP
-    if 'TPxV' in data.columns and 'Volume' in data.columns:
-        data['VWAP'] = data['TPxV'].cumsum() / data['Volume'].fillna(0).cumsum()
-    else:
-        st.warning(f"{ticker}: Required columns missing for VWAP calculation.")
-        continue  # ← was incorrectly indented under an absent if-block
+    data['VWAP'] = (
+        data['TPxV'].cumsum() /
+        data['Volume'].fillna(0).cumsum()
+    )
 
-    # Signal logic  ← same 4-space indent as the above blocks
-    signal = ""
-    trade_flag = False
-    rank_value = 0
+else:
+    st.warning(f"{ticker}: Required columns missing for VWAP calculation.")
+    continue  # still inside the for-loop
+
+
+# Signal logic (still inside the for-loop)
+signal = ""
+trade_flag = False
+rank_value = 0
 
     try:
         if strategy == "Breakout":
