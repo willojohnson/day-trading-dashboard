@@ -13,8 +13,10 @@ TICKERS = [
     "PLTR", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP", "TSM", "CRWV", "DDOG"
 ]
 
-# --- Leaderboard History ---
-signal_leaderboard = defaultdict(int)
+# --- Leaderboard History (session state for persistence) ---
+if 'signal_leaderboard' not in st.session_state:
+    st.session_state.signal_leaderboard = defaultdict(int)
+signal_leaderboard = st.session_state.signal_leaderboard
 
 # --- UI Setup ---
 st.set_page_config(layout="wide")
@@ -40,20 +42,26 @@ Looks for steady momentum: 20MA > 50MA means upward trend likely continuing.
 if st.sidebar.button("\U0001F501 Refresh Now"):
     st.rerun()
 
-# Sound alert function
+# --- Sound alert function ---
 def play_alert():
     sound_file_path = "alert.mp3"
     if os.path.exists(sound_file_path):
-        b64_sound = base64.b64encode(open(sound_file_path, "rb").read()).decode()
+        with open(sound_file_path, "rb") as f:
+            b64_sound = base64.b64encode(f.read()).decode()
         sound_html = f"""
             <audio autoplay>
                 <source src="data:audio/mp3;base64,{b64_sound}" type="audio/mp3">
             </audio>"""
         st.markdown(sound_html, unsafe_allow_html=True)
 
-# Create dummy alert file
-with open("alert.mp3", "wb") as f:
-    f.write(b"ID3\x03\x00\x00\x00\x00\x00\x21TIT2\x00\x00\x00\x07\x00\x00\x03Beep\x00\x00")
+# --- Only create dummy alert file if it doesn't exist ---
+if not os.path.exists("alert.mp3"):
+    with open("alert.mp3", "wb") as f:
+        f.write(b"ID3\x03\x00\x00\x00\x00\x00\x21TIT2\x00\x00\x00\x07\x00\x00\x03Beep\x00\x00")
+
+# --- Helper function for safe scalar extraction ---
+def get_scalar(val):
+    return val.item() if hasattr(val, "item") else val
 
 placeholder = st.empty()
 
@@ -65,15 +73,31 @@ with placeholder.container():
 
     for ticker in TICKERS:
         st.subheader(f"Loading data for {ticker}...")
-        data = yf.download(ticker, start=start_date, end=end_date, interval="5m")
+        try:
+            data = yf.download(ticker, start=start_date, end=end_date, interval="5m", progress=False)
+        except Exception as e:
+            st.error(f"Error downloading data for {ticker}: {e}")
+            continue
+
         if data.empty or len(data) < 50 or 'Close' not in data.columns:
             st.error(f"Not enough or invalid data for {ticker}.")
             continue
 
-        data.index = data.index.tz_localize(None)
-        market_open = data.between_time("09:30", "16:00")
-        data = market_open.copy()
+        # Remove timezone if present
+        try:
+            if hasattr(data.index, "tz") and data.index.tz is not None:
+                data.index = data.index.tz_localize(None)
+        except Exception:
+            pass
 
+        # Filter for regular market hours
+        try:
+            market_open = data.between_time("09:30", "16:00")
+            data = market_open.copy()
+        except Exception:
+            pass
+
+        # Technical indicators
         data['20_MA'] = data['Close'].rolling(window=20).mean()
         data['50_MA'] = data['Close'].rolling(window=50).mean()
         data['High_Break'] = data['High'].rolling(window=20).max()
@@ -81,13 +105,14 @@ with placeholder.container():
         data['Volume_Surge'] = data['Volume'] > data['Volume'].rolling(window=20).mean() * 1.5
         data['Momentum'] = data['Close'].pct_change().rolling(window=10).sum()
 
-        # VWAP Calculation
+        # VWAP Calculation with zero-division protection
         if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
             data['Typical_Price'] = (
                 data['High'].fillna(0) + data['Low'].fillna(0) + data['Close'].fillna(0)
             ) / 3
             data['TPxV'] = data['Typical_Price'].fillna(0).astype(float) * data['Volume'].fillna(0).astype(float)
-            data['VWAP'] = data['TPxV'].cumsum() / data['Volume'].fillna(0).cumsum()
+            vwap_denominator = data['Volume'].fillna(0).cumsum().replace(0, 1e-9)
+            data['VWAP'] = data['TPxV'].cumsum() / vwap_denominator
 
         signal = ""
         trade_flag = False
@@ -95,31 +120,31 @@ with placeholder.container():
 
         try:
             if strategy == "Breakout":
-                recent_high = data['High_Break'].iloc[-1].item()
-                current_close = data['Close'].iloc[-1].item()
-                current_vwap = data['VWAP'].iloc[-1].item()
+                recent_high = get_scalar(data['High_Break'].iloc[-1])
+                current_close = get_scalar(data['Close'].iloc[-1])
+                current_vwap = get_scalar(data['VWAP'].iloc[-1])
                 if pd.notna(recent_high) and pd.notna(current_close) and pd.notna(current_vwap) \
                    and current_close > recent_high and current_close > current_vwap:
                     signal = f"\U0001F514 Breakout: {ticker} above ${recent_high:.2f} & VWAP"
                     trade_flag = True
-                    rank_value = data['Momentum'].iloc[-1].item()
+                    rank_value = get_scalar(data['Momentum'].iloc[-1])
 
             elif strategy == "Scalping":
-                ma_20 = data['20_MA'].iloc[-1].item()
-                ma_50 = data['50_MA'].iloc[-1].item()
+                ma_20 = get_scalar(data['20_MA'].iloc[-1])
+                ma_50 = get_scalar(data['50_MA'].iloc[-1])
                 volume_surge = bool(data['Volume_Surge'].iloc[-1])
                 if pd.notna(ma_20) and pd.notna(ma_50) and volume_surge and ma_20 > ma_50:
                     signal = f"⚡ Scalping: {ticker} volume surge & 20MA > 50MA"
                     trade_flag = True
-                    rank_value = data['Volume'].iloc[-1].item()
+                    rank_value = get_scalar(data['Volume'].iloc[-1])
 
             elif strategy == "Trend Trading":
-                ma_20 = data['20_MA'].iloc[-1].item()
-                ma_50 = data['50_MA'].iloc[-1].item()
+                ma_20 = get_scalar(data['20_MA'].iloc[-1])
+                ma_50 = get_scalar(data['50_MA'].iloc[-1])
                 if pd.notna(ma_20) and pd.notna(ma_50) and ma_20 > ma_50:
                     signal = f"\U0001F4C8 Trend: {ticker} in uptrend (20MA > 50MA)"
                     trade_flag = True
-                    rank_value = data['Momentum'].iloc[-1].item()
+                    rank_value = get_scalar(data['Momentum'].iloc[-1])
         except Exception as e:
             st.warning(f"Error processing {ticker}: {e}")
 
@@ -140,12 +165,17 @@ with placeholder.container():
         st.dataframe(leaderboard_df)
 
     # --- Optional: Download Script from App ---
-    with open(__file__, "r", encoding="utf-8") as f:
-        full_code = f.read()
+    try:
+        import sys
+        script_path = sys.argv[0]
+        with open(script_path, "r", encoding="utf-8") as f:
+            full_code = f.read()
+        st.download_button(
+            label="\U0001F4E5 Download Updated Script",
+            data=full_code,
+            file_name="trading_dashboard.py",
+            mime="text/plain"
+        )
+    except Exception:
+        st.info("Script download not available in this environment.")
 
-    st.download_button(
-        label="\U0001F4E5 Download Updated Script",
-        data=full_code,
-        file_name="trading_dashboard.py",
-        mime="text/plain"
-    )
