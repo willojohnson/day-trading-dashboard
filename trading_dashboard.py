@@ -4,7 +4,6 @@ import pandas as pd
 import datetime
 import base64
 import os
-import time
 from collections import defaultdict
 from streamlit_autorefresh import st_autorefresh
 
@@ -19,22 +18,19 @@ signal_leaderboard = defaultdict(int)
 
 # --- UI Setup ---
 st.set_page_config(layout="wide")
-st.title("\U0001F4C8 Day Trading Dashboard")
+st.title("📈 Day Trading Dashboard")
 strategy = st.sidebar.selectbox("Select Strategy", ["Breakout", "Scalping", "Trend Trading"])
 refresh_rate = st.sidebar.slider("Refresh every N seconds", 30, 300, 60, step=10)
 
 # Auto Refresh and Timestamp
 st_autorefresh(interval=refresh_rate * 1000, key="datarefresh")
-
-# Display Last Updated Timestamp
 last_updated = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 st.sidebar.markdown(f"🕒 **Last Updated:** {last_updated} EST")
-
 
 if st.sidebar.button("🔁 Refresh Now"):
     st.rerun()
 
-# Strategy Definitions – Always Visible
+# --- Strategy Definitions ---
 st.sidebar.markdown("### 📘 Strategy Definitions")
 st.sidebar.markdown("""
 **Breakout**  
@@ -62,13 +58,11 @@ def play_alert():
 with open("alert.mp3", "wb") as f:
     f.write(b"ID3\x03\x00\x00\x00\x00\x00\x21TIT2\x00\x00\x00\x07\x00\x00\x03Beep\x00\x00")
 
-placeholder = st.empty()
-
-with placeholder.container():
-    now = datetime.datetime.now()
-    start_date = now - datetime.timedelta(days=5)
-    end_date = now
-    ranked_signals = []
+# Data range and prep
+now = datetime.datetime.now()
+start_date = now - datetime.timedelta(days=5)
+end_date = now
+ranked_signals = []
 
 for ticker in TICKERS:
     st.subheader(f"Loading data for {ticker}...")
@@ -89,7 +83,6 @@ for ticker in TICKERS:
         data['Low_Break'] = data['Low'].rolling(window=20).min()
         data['Volume_Surge'] = data['Volume'] > data['Volume'].rolling(window=20).mean() * 1.5
         data['Momentum'] = data['Close'].pct_change().rolling(window=10).sum()
-        # VWAP Calculation
         data['Typical_Price'] = (data['High'] + data['Low'] + data['Close']) / 3
         data['TPxV'] = data['Typical_Price'] * data['Volume']
         data['VWAP'] = data['TPxV'].cumsum() / data['Volume'].cumsum()
@@ -97,15 +90,16 @@ for ticker in TICKERS:
         st.warning(f"{ticker} does not have enough valid 'Close' data.")
         continue
 
+    # Signal logic
     signal = ""
     trade_flag = False
     rank_value = 0
 
     try:
         if strategy == "Breakout":
-            recent_high = data['High_Break'].iloc[-1].item()
-            current_close = data['Close'].iloc[-1].item()
-            current_vwap = data['VWAP'].iloc[-1].item()
+            recent_high = data['High_Break'].iloc[-1]
+            current_close = data['Close'].iloc[-1]
+            current_vwap = data['VWAP'].iloc[-1]
             if (
                 pd.notna(recent_high) and
                 pd.notna(current_close) and
@@ -113,44 +107,46 @@ for ticker in TICKERS:
                 current_close > recent_high and
                 current_close > current_vwap
             ):
-                signal = f"\U0001F514 Breakout: {ticker} above ${recent_high:.2f} & VWAP"
+                signal = f"🔔 Breakout: {ticker} above ${recent_high:.2f} & VWAP"
                 trade_flag = True
-                rank_value = data['Momentum'].iloc[-1].item()
+                rank_value = data['Momentum'].iloc[-1]
 
         elif strategy == "Scalping":
-            ma_20 = data['20_MA'].iloc[-1].item()
-            ma_50 = data['50_MA'].iloc[-1].item()
+            ma_20 = data['20_MA'].iloc[-1]
+            ma_50 = data['50_MA'].iloc[-1]
             volume_surge = bool(data['Volume_Surge'].iloc[-1])
             if pd.notna(ma_20) and pd.notna(ma_50) and volume_surge and ma_20 > ma_50:
                 signal = f"⚡ Scalping: {ticker} volume surge & 20MA > 50MA"
                 trade_flag = True
-                rank_value = data['Volume'].iloc[-1].item()
+                rank_value = data['Volume'].iloc[-1]
 
         elif strategy == "Trend Trading":
-            ma_20 = data['20_MA'].iloc[-1].item()
-            ma_50 = data['50_MA'].iloc[-1].item()
+            ma_20 = data['20_MA'].iloc[-1]
+            ma_50 = data['50_MA'].iloc[-1]
             if pd.notna(ma_20) and pd.notna(ma_50) and ma_20 > ma_50:
-                signal = f"\U0001F4C8 Trend: {ticker} in uptrend (20MA > 50MA)"
+                signal = f"📈 Trend: {ticker} in uptrend (20MA > 50MA)"
                 trade_flag = True
-                rank_value = data['Momentum'].iloc[-1].item()
+                rank_value = data['Momentum'].iloc[-1]
 
     except Exception as e:
         st.warning(f"Error processing {ticker}: {e}")
-
-
 
     if trade_flag:
         ranked_signals.append((ticker, signal, rank_value))
         signal_leaderboard[ticker] += 1
         play_alert()
 
-    if ranked_signals:
-        st.markdown("### \U0001F4CA Real-Time Signals")
-        ranked_signals.sort(key=lambda x: x[2], reverse=True)
-        for ticker, signal, rank in ranked_signals:
-            st.success(signal)
+# Display results
+if ranked_signals:
+    st.markdown("### 📊 Real-Time Signals")
+    ranked_signals.sort(key=lambda x: x[2], reverse=True)
+    for ticker, signal, rank in ranked_signals:
+        st.success(signal)
 
-    if signal_leaderboard:
-        leaderboard_df = pd.DataFrame(sorted(signal_leaderboard.items(), key=lambda x: x[1], reverse=True), columns=['Ticker', 'Signal Count'])
-        st.markdown("### \U0001F3C6 Signal Leaderboard")
-        st.dataframe(leaderboard_df)
+if signal_leaderboard:
+    leaderboard_df = pd.DataFrame(
+        sorted(signal_leaderboard.items(), key=lambda x: x[1], reverse=True),
+        columns=['Ticker', 'Signal Count']
+    )
+    st.markdown("### 🏆 Signal Leaderboard")
+    st.dataframe(leaderboard_df)
