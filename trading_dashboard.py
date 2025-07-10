@@ -94,10 +94,11 @@ if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
     data['TPxV'] = data['Typical_Price'] * data['Volume'].fillna(0)
 
     # Step 3: Calculate VWAP
-    data['VWAP'] = data['TPxV'].cumsum() / data['Volume'].fillna(0).cumsum()
-else:
+    if 'TPxV' in data.columns and 'Volume' in data.columns:
+        data['VWAP'] = data['TPxV'].cumsum() / data['Volume'].fillna(0).cumsum()
+    else:
         st.warning(f"{ticker}: Required columns missing for VWAP calculation.")
-continue  # ← indented under else
+        continue  # ← was incorrectly indented under an absent if-block
 
     # Signal logic  ← same 4-space indent as the above blocks
     signal = ""
