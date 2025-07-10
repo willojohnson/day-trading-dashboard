@@ -5,6 +5,7 @@ import datetime
 import base64
 import os
 from collections import defaultdict
+from streamlit_autorefresh import st_autorefresh
 
 # --- AI Watchlist ---
 TICKERS = [
@@ -20,8 +21,14 @@ st.set_page_config(layout="wide")
 st.title("\U0001F4C8 Day Trading Dashboard")
 strategy = st.sidebar.selectbox("Select Strategy", ["Breakout", "Scalping", "Trend Trading"])
 refresh_rate = st.sidebar.slider("Refresh every N seconds", 30, 300, 60, step=10)
+st_autorefresh(interval=refresh_rate * 1000, key="datarefresh")
+
+# Display Last Updated Timestamp
+last_updated = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+st.sidebar.markdown("<p style='margin-top: -10px;'>🕒 <b>Last Updated:</b> " + last_updated + " EST</p>", unsafe_allow_html=True)
+
 # Strategy Definitions – Always Visible
-st.sidebar.markdown("### 📘 Strategy Definitions")
+st.sidebar.markdown("### \U0001F4D8 Strategy Definitions")
 st.sidebar.markdown("""
 **Breakout**  
 Triggered when price breaks above recent highs *and* trades above intraday VWAP — a sign of bullish conviction.
@@ -34,7 +41,7 @@ Looks for steady momentum: 20MA > 50MA means upward trend likely continuing.
 """)
 
 # Manual Refresh Button
-if st.sidebar.button("Refresh Now"):
+if st.sidebar.button("\U0001F501 Refresh Now"):
     st.rerun()
 
 # Sound alert function
@@ -78,6 +85,14 @@ with placeholder.container():
         data['Volume_Surge'] = data['Volume'] > data['Volume'].rolling(window=20).mean() * 1.5
         data['Momentum'] = data['Close'].pct_change().rolling(window=10).sum()
 
+        # VWAP Calculation
+        if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
+            data['Typical_Price'] = (
+                data['High'].fillna(0) + data['Low'].fillna(0) + data['Close'].fillna(0)
+            ) / 3
+            data['TPxV'] = data['Typical_Price'] * data['Volume'].fillna(0)
+            data['VWAP'] = data['TPxV'].cumsum() / data['Volume'].fillna(0).cumsum()
+
         signal = ""
         trade_flag = False
         rank_value = 0
@@ -86,8 +101,10 @@ with placeholder.container():
             if strategy == "Breakout":
                 recent_high = data['High_Break'].iloc[-1].item()
                 current_close = data['Close'].iloc[-1].item()
-                if pd.notna(recent_high) and pd.notna(current_close) and current_close > recent_high:
-                    signal = f"\U0001F514 Breakout: {ticker} above ${recent_high:.2f}"
+                current_vwap = data['VWAP'].iloc[-1].item()
+                if pd.notna(recent_high) and pd.notna(current_close) and pd.notna(current_vwap) \
+                   and current_close > recent_high and current_close > current_vwap:
+                    signal = f"\U0001F514 Breakout: {ticker} above ${recent_high:.2f} & VWAP"
                     trade_flag = True
                     rank_value = data['Momentum'].iloc[-1].item()
 
@@ -127,12 +144,15 @@ with placeholder.container():
         st.dataframe(leaderboard_df)
 
 # --- Optional: Download Script from App ---
-with open(__file__, "r") as f:
-    full_code = f.read()
+try:
+    with open(__file__, "r") as f:
+        full_code = f.read()
 
-st.download_button(
-    label="📥 Download Updated Script",
-    data=full_code,
-    file_name="trading_dashboard.py",
-    mime="text/plain"
-)
+    st.download_button(
+        label="\U0001F4E5 Download Updated Script",
+        data=full_code,
+        file_name="trading_dashboard.py",
+        mime="text/plain"
+    )
+except:
+    st.warning("Script download not available in this environment.")
