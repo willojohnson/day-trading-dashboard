@@ -126,10 +126,10 @@ except Exception as e:
     st.warning(f"Error processing {ticker}: {e}")
 
 
-        if trade_flag:
-            ranked_signals.append((ticker, signal, rank_value))
-            signal_leaderboard[ticker] += 1
-            play_alert()
+    if trade_flag:
+        ranked_signals.append((ticker, signal, rank_value))
+        signal_leaderboard[ticker] += 1
+        play_alert()
 
     if ranked_signals:
         st.markdown("### \U0001F4CA Real-Time Signals")
