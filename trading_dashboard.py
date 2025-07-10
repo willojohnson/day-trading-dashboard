@@ -6,6 +6,7 @@ import base64
 import os
 import time
 from collections import defaultdict
+from streamlit_autorefresh import st_autorefresh
 
 # --- AI Watchlist ---
 TICKERS = [
@@ -21,6 +22,8 @@ st.set_page_config(layout="wide")
 st.title("\U0001F4C8 Day Trading Dashboard")
 strategy = st.sidebar.selectbox("Select Strategy", ["Breakout", "Scalping", "Trend Trading"])
 refresh_rate = st.sidebar.slider("Refresh every N seconds", 30, 300, 60, step=10)
+st_autorefresh(interval=refresh_rate * 1000, key="datarefresh")
+
 # Strategy Definitions – Always Visible
 st.sidebar.markdown("### 📘 Strategy Definitions")
 st.sidebar.markdown("""
@@ -33,12 +36,6 @@ Short, fast trades triggered by volume surges and a 20MA crossing above 50MA.
 **Trend Trading**  
 Looks for steady momentum: 20MA > 50MA means upward trend likely continuing.
 """)
-
-if st.sidebar.button("Refresh Now"):
-    st.rerun()
-else:
-    time.sleep(refresh_rate)
-    st.rerun()
 
 # Sound alert function
 def play_alert():
