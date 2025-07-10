@@ -90,14 +90,18 @@ with placeholder.container():
         except Exception:
             pass
 
-        # Filter for regular market hours
+        # Filter for regular market hours and copy
         try:
-            market_open = data.between_time("09:30", "16:00")
-            data = market_open.copy()
+            data = data.between_time("09:30", "16:00").copy()
         except Exception:
             pass
 
-        # Technical indicators
+        # If after filtering, data is empty, skip
+        if data.empty or len(data) < 50 or 'Close' not in data.columns:
+            st.error(f"Not enough or invalid data for {ticker} after market hours filter.")
+            continue
+
+        # Technical indicators (all on filtered data)
         data['20_MA'] = data['Close'].rolling(window=20).mean()
         data['50_MA'] = data['Close'].rolling(window=50).mean()
         data['High_Break'] = data['High'].rolling(window=20).max()
@@ -105,13 +109,17 @@ with placeholder.container():
         data['Volume_Surge'] = data['Volume'] > data['Volume'].rolling(window=20).mean() * 1.5
         data['Momentum'] = data['Close'].pct_change().rolling(window=10).sum()
 
-        # VWAP Calculation with zero-division protection
+        # VWAP Calculation with index alignment
         if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
-            data['Typical_Price'] = (
-                data['High'].fillna(0) + data['Low'].fillna(0) + data['Close'].fillna(0)
-            ) / 3
-            data['TPxV'] = data['Typical_Price'].fillna(0).astype(float) * data['Volume'].fillna(0).astype(float)
-            vwap_denominator = data['Volume'].fillna(0).cumsum().replace(0, 1e-9)
+            typical_price = (data['High'].fillna(0) + data['Low'].fillna(0) + data['Close'].fillna(0)) / 3
+            typical_price = typical_price.astype(float)
+            volume = data['Volume'].fillna(0).astype(float)
+            # Ensure index alignment
+            typical_price = typical_price.reindex(data.index, fill_value=0)
+            volume = volume.reindex(data.index, fill_value=0)
+            data['Typical_Price'] = typical_price
+            data['TPxV'] = typical_price * volume
+            vwap_denominator = volume.cumsum().replace(0, 1e-9)
             data['VWAP'] = data['TPxV'].cumsum() / vwap_denominator
 
         signal = ""
@@ -178,4 +186,3 @@ with placeholder.container():
         )
     except Exception:
         st.info("Script download not available in this environment.")
-
