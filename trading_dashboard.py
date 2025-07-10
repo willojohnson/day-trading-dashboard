@@ -109,17 +109,14 @@ with placeholder.container():
         data['Volume_Surge'] = data['Volume'] > data['Volume'].rolling(window=20).mean() * 1.5
         data['Momentum'] = data['Close'].pct_change().rolling(window=10).sum()
 
-        # --- VWAP Calculation with explicit index alignment ---
+        # --- VWAP Calculation (robust and 1D) ---
         if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
-            typical_price = (data['High'].fillna(0) + data['Low'].fillna(0) + data['Close'].fillna(0)) / 3
-            typical_price = pd.Series(typical_price.values, index=data.index)
-            volume = pd.Series(data['Volume'].fillna(0).values, index=data.index)
-            data['Typical_Price'] = typical_price
-            data['TPxV'] = typical_price * volume
-            vwap_denominator = volume.cumsum().replace(0, 1e-9)
-            vwap = data['TPxV'].cumsum() / vwap_denominator
-            # Ensure vwap index matches data before assignment
-            data['VWAP'] = pd.Series(vwap.values, index=data.index)
+            # Typical Price
+            data['Typical_Price'] = (data['High'] + data['Low'] + data['Close']) / 3
+            # TPxV
+            data['TPxV'] = data['Typical_Price'] * data['Volume']
+            # VWAP
+            data['VWAP'] = data['TPxV'].cumsum() / data['Volume'].cumsum().replace(0, 1e-9)
 
         signal = ""
         trade_flag = False
