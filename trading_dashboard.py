@@ -81,11 +81,12 @@ with placeholder.container():
         market_open = data.between_time("09:30", "16:00")
         data = market_open.copy()
 
-        if 'Close' in data.columns and len(data['Close'].dropna()) >= 20:
+      if 'Close' in data.columns and len(data['Close'].dropna()) >= 20:
     data['20_MA'] = data['Close'].rolling(window=20).mean()
 else:
     st.warning(f"{ticker} does not have enough valid 'Close' data.")
     continue
+
         data['50_MA'] = data['Close'].rolling(window=50).mean()
         data['High_Break'] = data['High'].rolling(window=20).max()
         data['Low_Break'] = data['Low'].rolling(window=20).min()
