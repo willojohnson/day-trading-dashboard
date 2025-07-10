@@ -109,15 +109,13 @@ with placeholder.container():
         data['Volume_Surge'] = data['Volume'] > data['Volume'].rolling(window=20).mean() * 1.5
         data['Momentum'] = data['Close'].pct_change().rolling(window=10).sum()
 
-        # --- VWAP Calculation: always use .reindex(data.index) to guarantee alignment ---
+        # --- VWAP Calculation: robust against length mismatch ---
         if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
-            typical_price = (data['High'] + data['Low'] + data['Close']) / 3
-            typical_price = typical_price.reindex(data.index)
-            volume = data['Volume'].reindex(data.index)
-            data['Typical_Price'] = typical_price
-            data['TPxV'] = (typical_price * volume).reindex(data.index)
-            vwap_denominator = volume.cumsum().replace(0, 1e-9)
-            data['VWAP'] = (data['TPxV'].cumsum() / vwap_denominator).reindex(data.index)
+        data['Typical_Price'] = (data['High'] + data['Low'] + data['Close']) / 3
+        data['TPxV'] = (data['Typical_Price'] * data['Volume']).reindex(data.index)
+        vwap_numerator = data['TPxV'].cumsum().reindex(data.index)
+        vwap_denominator = data['Volume'].cumsum().replace(0, 1e-9).reindex(data.index)
+        data['VWAP'] = (vwap_numerator / vwap_denominator).reindex(data.index)
 
         signal = ""
         trade_flag = False
