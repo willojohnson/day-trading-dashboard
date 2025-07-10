@@ -134,14 +134,17 @@ with placeholder.container():
         for ticker, signal, rank in ranked_signals:
             st.success(signal)
 
-    if signal_leaderboard:
-        leaderboard_df = pd.DataFrame(sorted(signal_leaderboard.items(), key=lambda x: x[1], reverse=True), columns=['Ticker', 'Signal Count'])
-        st.markdown("### \U0001F3C6 Signal Leaderboard")
-        st.dataframe(leaderboard_df)
+def display_ranked_signals(ranked_signals):
+if ranked_signals:
+st.markdown("### \U0001F4CA Real-Time Signals")
+ranked_signals.sort(key=lambda x: x[2], reverse=True)
+for ticker, signal, rank in ranked_signals:
+st.success(signal)
+```
 
 # --- Optional: Download Script from App ---
 try:
-    with open(__file__, "r") as f:
+    with open(__file__, "r", encoding="utf-8") as f:
         full_code = f.read()
 
     st.download_button(
