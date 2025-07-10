@@ -92,9 +92,9 @@ else:
     st.warning(f"{ticker} does not have enough valid 'Close' data.")
     continue
 
-        signal = ""
-        trade_flag = False
-        rank_value = 0
+signal = ""
+trade_flag = False
+rank_value = 0
 
         try:
             if strategy == "Breakout":
