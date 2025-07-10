@@ -90,7 +90,7 @@ with placeholder.container():
             data['Typical_Price'] = (
                 data['High'].fillna(0) + data['Low'].fillna(0) + data['Close'].fillna(0)
             ) / 3
-            data['TPxV'] = (data['Typical_Price'] * data['Volume'].fillna(0)).astype(float)
+            data['TPxV'] = data['Typical_Price'].fillna(0) * data['Volume'].fillna(0)
             data['VWAP'] = data['TPxV'].cumsum() / data['Volume'].fillna(0).cumsum()
 
         signal = ""
