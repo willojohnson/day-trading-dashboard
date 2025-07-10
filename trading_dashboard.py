@@ -134,10 +134,14 @@ with placeholder.container():
         for ticker, signal, rank in ranked_signals:
             st.success(signal)
 
+def display_signal_leaderboard(signal_leaderboard):
     if signal_leaderboard:
         leaderboard_df = pd.DataFrame(sorted(signal_leaderboard.items(), key=lambda x: x[1], reverse=True), columns=['Ticker', 'Signal Count'])
         st.markdown("### \U0001F3C6 Signal Leaderboard")
         st.dataframe(leaderboard_df)
+
+# Calling the function with a sample signal_leaderboard dictionary
+# display_signal_leaderboard({'AAPL': 10, 'GOOGL': 15, 'MSFT': 5})
 
     # --- Optional: Download Script from App ---
     with open(__file__, "r", encoding="utf-8") as f:
