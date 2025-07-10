@@ -25,7 +25,7 @@ st_autorefresh(interval=refresh_rate * 1000, key="datarefresh")
 
 # Display Last Updated Timestamp
 last_updated = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-st.sidebar.markdown("<p style='margin-top: -10px;'>🕒 <b>Last Updated:</b> " + last_updated + " EST</p>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='margin-top: -10px;'>\U0001F552 <b>Last Updated:</b> " + last_updated + " EST</p>", unsafe_allow_html=True)
 
 # Strategy Definitions – Always Visible
 st.sidebar.markdown("### \U0001F4D8 Strategy Definitions")
@@ -90,7 +90,7 @@ with placeholder.container():
             data['Typical_Price'] = (
                 data['High'].fillna(0) + data['Low'].fillna(0) + data['Close'].fillna(0)
             ) / 3
-            data['TPxV'] = data['Typical_Price'] * data['Volume'].fillna(0)
+            data['TPxV'] = (data['Typical_Price'] * data['Volume'].fillna(0)).astype(float)
             data['VWAP'] = data['TPxV'].cumsum() / data['Volume'].fillna(0).cumsum()
 
         signal = ""
