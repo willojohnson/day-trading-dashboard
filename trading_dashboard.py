@@ -4,6 +4,7 @@ import pandas as pd
 import datetime
 import base64
 import os
+import time
 from collections import defaultdict
 
 # --- AI Watchlist ---
@@ -33,8 +34,10 @@ Short, fast trades triggered by volume surges and a 20MA crossing above 50MA.
 Looks for steady momentum: 20MA > 50MA means upward trend likely continuing.
 """)
 
-# Manual Refresh Button
 if st.sidebar.button("Refresh Now"):
+    st.rerun()
+else:
+    time.sleep(refresh_rate)
     st.rerun()
 
 # Sound alert function
