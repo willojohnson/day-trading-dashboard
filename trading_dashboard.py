@@ -110,13 +110,13 @@ with placeholder.container():
             st.error(f"Not enough or invalid data for {ticker} after market hours filter.")
             continue
 
-        # All calculations and assignments must use the filtered DataFrame only!
-        data['20_MA'] = data['Close'].rolling(window=20).mean()
-        data['50_MA'] = data['Close'].rolling(window=50).mean()
-        data['High_Break'] = data['High'].rolling(window=20).max()
-        data['Low_Break'] = data['Low'].rolling(window=20).min()
-        data['Volume_Surge'] = data['Volume'] > data['Volume'].rolling(window=20).mean() * 1.5
-        data['Momentum'] = data['Close'].pct_change().rolling(window=10).sum()
+        # --- Rolling calculations with reindex to avoid shape mismatch ---
+        data['20_MA'] = data['Close'].rolling(window=20, min_periods=1).mean().reindex(data.index)
+        data['50_MA'] = data['Close'].rolling(window=50, min_periods=1).mean().reindex(data.index)
+        data['High_Break'] = data['High'].rolling(window=20, min_periods=1).max().reindex(data.index)
+        data['Low_Break'] = data['Low'].rolling(window=20, min_periods=1).min().reindex(data.index)
+        data['Volume_Surge'] = (data['Volume'] > data['Volume'].rolling(window=20, min_periods=1).mean() * 1.5).reindex(data.index)
+        data['Momentum'] = data['Close'].pct_change().rolling(window=10, min_periods=1).sum().reindex(data.index)
 
         # --- VWAP Calculation: robust against length mismatch ---
         if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
@@ -126,7 +126,7 @@ with placeholder.container():
             data['TPxV'] = (data['Typical_Price'] * data['Volume'])
             vwap_numerator = data['TPxV'].cumsum()
             vwap_denominator = data['Volume'].cumsum().replace(0, 1e-9)
-            data['VWAP'] = (vwap_numerator / vwap_denominator)
+            data['VWAP'] = (vwap_numerator / vwap_denominator).reindex(data.index)
 
         signal = ""
         trade_flag = False
