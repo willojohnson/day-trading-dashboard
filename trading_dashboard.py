@@ -141,6 +141,9 @@ with placeholder.container():
         st.markdown("### \U0001F3C6 Signal Leaderboard")
         st.dataframe(leaderboard_df)
 
+    # Last updated timestamp
+    st.caption(f"Last updated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
     # --- Optional: Download Script from App ---
     try:
         with open(__file__, "r", encoding="utf-8") as f:
