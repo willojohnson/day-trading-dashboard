@@ -4,7 +4,6 @@ import pandas as pd
 import datetime
 import base64
 import os
-from collections import defaultdict
 from streamlit_autorefresh import st_autorefresh
 
 # --- AI Watchlist ---
@@ -15,7 +14,7 @@ TICKERS = [
 
 # --- Leaderboard History (session state for persistence) ---
 if 'signal_leaderboard' not in st.session_state:
-    st.session_state.signal_leaderboard = defaultdict(int)
+    st.session_state.signal_leaderboard = {}
 signal_leaderboard = st.session_state.signal_leaderboard
 
 # --- UI Setup ---
@@ -46,18 +45,24 @@ if st.sidebar.button("\U0001F501 Refresh Now"):
 def play_alert():
     sound_file_path = "alert.mp3"
     if os.path.exists(sound_file_path):
-        with open(sound_file_path, "rb") as f:
-            b64_sound = base64.b64encode(f.read()).decode()
-        sound_html = f"""
-            <audio autoplay>
-                <source src="data:audio/mp3;base64,{b64_sound}" type="audio/mp3">
-            </audio>"""
-        st.markdown(sound_html, unsafe_allow_html=True)
+        try:
+            with open(sound_file_path, "rb") as f:
+                b64_sound = base64.b64encode(f.read()).decode()
+            sound_html = f"""
+                <audio autoplay>
+                    <source src="data:audio/mp3;base64,{b64_sound}" type="audio/mp3">
+                </audio>"""
+            st.markdown(sound_html, unsafe_allow_html=True)
+        except Exception:
+            pass  # In case reading the file fails
 
 # --- Only create dummy alert file if it doesn't exist ---
 if not os.path.exists("alert.mp3"):
-    with open("alert.mp3", "wb") as f:
-        f.write(b"ID3\x03\x00\x00\x00\x00\x00\x21TIT2\x00\x00\x00\x07\x00\x00\x03Beep\x00\x00")
+    try:
+        with open("alert.mp3", "wb") as f:
+            f.write(b"ID3\x03\x00\x00\x00\x00\x00\x21TIT2\x00\x00\x00\x07\x00\x00\x03Beep\x00\x00")
+    except Exception:
+        pass  # File writing may not be allowed in some environments
 
 # --- Helper function for safe scalar extraction ---
 def get_scalar(val):
@@ -82,6 +87,10 @@ with placeholder.container():
         if data.empty or len(data) < 50 or 'Close' not in data.columns:
             st.error(f"Not enough or invalid data for {ticker}.")
             continue
+
+        # Ensure index is DatetimeIndex for time filtering
+        if not isinstance(data.index, pd.DatetimeIndex):
+            data.index = pd.to_datetime(data.index)
 
         # Remove timezone if present
         try:
@@ -117,11 +126,6 @@ with placeholder.container():
             data['TPxV'] = (data['Typical_Price'] * data['Volume'])
             vwap_numerator = data['TPxV'].cumsum()
             vwap_denominator = data['Volume'].cumsum().replace(0, 1e-9)
-            # Print lengths for debugging
-            print("len(data):", len(data))
-            print("len(TPxV):", len(data['TPxV']))
-            print("len(vwap_numerator):", len(vwap_numerator))
-            print("len(vwap_denominator):", len(vwap_denominator))
             data['VWAP'] = (vwap_numerator / vwap_denominator)
 
         signal = ""
@@ -160,7 +164,7 @@ with placeholder.container():
 
         if trade_flag:
             ranked_signals.append((ticker, signal, rank_value))
-            signal_leaderboard[ticker] += 1
+            signal_leaderboard[ticker] = signal_leaderboard.get(ticker, 0) + 1
             play_alert()
 
     if ranked_signals:
