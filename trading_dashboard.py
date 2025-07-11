@@ -88,7 +88,7 @@ with placeholder.container():
             data['Typical_Price'] = (
                 data['High'].fillna(0) + data['Low'].fillna(0) + data['Close'].fillna(0)
             ) / 3
-            data['TPxV'] = data['Typical_Price'] * data['Volume'].fillna(0)
+            data['TPxV'] = data['Typical_Price'].fillna(0).astype(float) * data['Volume'].fillna(0).astype(float)
             volume_cumsum = data['Volume'].fillna(0).cumsum()
             volume_cumsum = volume_cumsum.replace(0, 1)  # Avoid division by zero
             data['VWAP'] = data['TPxV'].cumsum() / volume_cumsum
