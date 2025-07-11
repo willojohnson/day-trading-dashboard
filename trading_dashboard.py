@@ -6,6 +6,7 @@ import base64
 import os
 from collections import defaultdict
 from streamlit_autorefresh import st_autorefresh
+import socket
 
 # --- AI Watchlist ---
 TICKERS = [
@@ -141,8 +142,9 @@ with placeholder.container():
         st.markdown("### \U0001F3C6 Signal Leaderboard")
         st.dataframe(leaderboard_df)
 
-    # Last updated timestamp
-    st.caption(f"Last updated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    # Last updated timestamp and environment info
+    environment = "Localhost" if socket.gethostname() == "localhost" else "Streamlit Cloud"
+    st.caption(f"Last updated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ({environment})")
 
     # --- Optional: Download Script from App ---
     try:
