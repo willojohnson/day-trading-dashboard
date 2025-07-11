@@ -11,7 +11,7 @@ import socket
 # --- AI Watchlist ---
 TICKERS = [
     "NVDA", "MSFT", "GOOGL", "AMZN", "META", "TSLA",
-    "PLTR", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP", "TSM", "CRVW", "DDOG"
+    "PLTR", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP", "TSM", "DDOG"
 ]
 
 # --- Leaderboard History ---
