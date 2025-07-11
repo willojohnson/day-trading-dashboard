@@ -84,16 +84,15 @@ with placeholder.container():
 
         # VWAP Calculation
         if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
-            data = data.copy()
-            data['Typical_Price'] = (
-                data['High'].fillna(0) + data['Low'].fillna(0) + data['Close'].fillna(0)
+            typical_price = (
+                data['High'].fillna(0).astype(float) +
+                data['Low'].fillna(0).astype(float) +
+                data['Close'].fillna(0).astype(float)
             ) / 3
-            typical_price = data['Typical_Price'].fillna(0).astype(float)
             volume = data['Volume'].fillna(0).astype(float)
-            data['TPxV'] = typical_price * volume
-            volume_cumsum = volume.cumsum()
-            volume_cumsum = volume_cumsum.replace(0, 1)  # Avoid division by zero
-            data['VWAP'] = data['TPxV'].cumsum() / volume_cumsum
+            tpxv = typical_price * volume
+            volume_cumsum = volume.cumsum().replace(0, 1)  # Avoid division by zero
+            data['VWAP'] = tpxv.cumsum() / volume_cumsum
 
         signal = ""
         trade_flag = False
