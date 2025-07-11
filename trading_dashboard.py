@@ -84,10 +84,11 @@ with placeholder.container():
 
         # VWAP Calculation
         if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
+            data = data.copy()
             data['Typical_Price'] = (
                 data['High'].fillna(0) + data['Low'].fillna(0) + data['Close'].fillna(0)
             ) / 3
-            data['TPxV'] = (data['Typical_Price'].fillna(0).astype(float).values.flatten()) * (data['Volume'].fillna(0).astype(float).values.flatten())
+            data['TPxV'] = data['Typical_Price'] * data['Volume'].fillna(0)
             volume_cumsum = data['Volume'].fillna(0).cumsum()
             volume_cumsum = volume_cumsum.replace(0, 1)  # Avoid division by zero
             data['VWAP'] = data['TPxV'].cumsum() / volume_cumsum
