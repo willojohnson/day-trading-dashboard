@@ -100,16 +100,16 @@ with placeholder.container():
 
         if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
             try:
-                typical_price = (data['High'] + data['Low'] + data['Close']) / 3
-                volume = pd.to_numeric(data['Volume'], errors='coerce').fillna(0)
+                typical_price = ((data['High'].astype(float) + data['Low'].astype(float) + data['Close'].astype(float)) / 3).fillna(0)
+                volume = pd.to_numeric(data['Volume'], errors='coerce').astype(float).fillna(0)
 
-                tpxv = (typical_price * volume).fillna(0)
+                if typical_price.ndim != 1 or volume.ndim != 1:
+                    raise ValueError("VWAP calculation inputs must be 1-dimensional Series")
+
+                tpv = typical_price * volume
                 cum_vol = volume.cumsum().replace(0, 1e-9)
-
-                vwap = tpxv.cumsum() / cum_vol
-                vwap = vwap.fillna(0)
-
-                data.loc[:, 'VWAP'] = vwap
+                vwap = tpv.cumsum() / cum_vol
+                data['VWAP'] = vwap.fillna(0)
             except Exception as e:
                 st.warning(f"VWAP calc error for {ticker}: {e}")
                 continue
