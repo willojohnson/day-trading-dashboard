@@ -158,30 +158,36 @@ with placeholder.container():
                     rank_value = -data['RSI'].iloc[-1]
 
             elif strategy == "Lower High + Lower Low":
-                if data['High'].iloc[-1] < data['High'].iloc[-2] and data['Low'].iloc[-1] < data['Low'].iloc[-2]:
-                    signal = f"🔻 Bearish Pattern: {ticker} lower high + lower low"
-                    trade_flag = True
-                    rank_value = -data['Momentum'].iloc[-1]
+                if len(data) > 2 and pd.notna(data['High'].iloc[-1]) and pd.notna(data['High'].iloc[-2]) and pd.notna(data['Low'].iloc[-1]) and pd.notna(data['Low'].iloc[-2]):
+                    if data['High'].iloc[-1] < data['High'].iloc[-2] and data['Low'].iloc[-1] < data['Low'].iloc[-2]:
+                        signal = f"🔻 Bearish Pattern: {ticker} lower high + lower low"
+                        trade_flag = True
+                        rank_value = -data['Momentum'].iloc[-1]
 
             elif strategy == "Volume Spike Down":
-                if data['Volume'].iloc[-1] > data['Volume'].rolling(window=20).mean().iloc[-1] * 1.5 and close < open_:
-                    signal = f"📉 Volume Spike Down: {ticker} large red candle w/ high volume"
-                    trade_flag = True
-                    rank_value = -abs(data['Momentum'].iloc[-1])
+                vol = data['Volume']
+                if len(vol) > 20 and pd.notna(vol.iloc[-1]) and pd.notna(close) and pd.notna(open_):
+                    avg_vol = vol.rolling(window=20).mean().iloc[-1]
+                    if vol.iloc[-1] > avg_vol * 1.5 and close < open_:
+                        signal = f"📉 Volume Spike Down: {ticker} large red candle w/ high volume"
+                        trade_flag = True
+                        rank_value = -abs(data['Momentum'].iloc[-1])
 
             elif strategy == "Shooting Star":
-                candle_body = abs(close - open_)
-                upper_wick = high - max(close, open_)
-                if pd.notna(upper_wick) and pd.notna(candle_body) and upper_wick > candle_body * 2:
-                    signal = f"🌠 Shooting Star: {ticker} — potential intraday reversal"
-                    trade_flag = True
-                    rank_value = -data['Momentum'].iloc[-1]
+                if pd.notna(close) and pd.notna(open_) and pd.notna(high):
+                    candle_body = abs(close - open_)
+                    upper_wick = high - max(close, open_)
+                    if pd.notna(upper_wick) and pd.notna(candle_body) and upper_wick > candle_body * 2:
+                        signal = f"🌠 Shooting Star: {ticker} — potential intraday reversal"
+                        trade_flag = True
+                        rank_value = -data['Momentum'].iloc[-1]
 
             elif strategy == "VWAP Retest Fail" and pd.notna(vwap):
-                if data['Close'].iloc[-2] < vwap and close < vwap and high > vwap:
-                    signal = f"❌ VWAP Retest Fail: {ticker} could not reclaim VWAP"
-                    trade_flag = True
-                    rank_value = -data['Momentum'].iloc[-1]
+                if len(data) > 2 and pd.notna(data['Close'].iloc[-2]) and pd.notna(high) and pd.notna(close):
+                    if data['Close'].iloc[-2] < vwap and close < vwap and high > vwap:
+                        signal = f"❌ VWAP Retest Fail: {ticker} could not reclaim VWAP"
+                        trade_flag = True
+                        rank_value = -data['Momentum'].iloc[-1]
 
         except Exception as e:
             st.warning(f"Error processing {ticker}: {e}")
