@@ -100,16 +100,16 @@ with placeholder.container():
 
     if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
         try:
-        typical_price = (data['High'] + data['Low'] + data['Close']) / 3
-        volume = pd.to_numeric(data['Volume'], errors='coerce').fillna(0)
+            typical_price = (data['High'] + data['Low'] + data['Close']) / 3
+            volume = pd.to_numeric(data['Volume'], errors='coerce').fillna(0)
 
-        tpxv = (typical_price * volume).fillna(0)
-        cum_vol = volume.cumsum().replace(0, 1e-9)
+            tpxv = (typical_price * volume).fillna(0)
+            cum_vol = volume.cumsum().replace(0, 1e-9)
 
-        vwap = tpxv.cumsum() / cum_vol
-        vwap = vwap.fillna(0)
+            vwap = tpxv.cumsum() / cum_vol
+            vwap = vwap.fillna(0)
 
-        data.loc[:, 'VWAP'] = vwap
+            data.loc[:, 'VWAP'] = vwap
     except Exception as e:
         st.warning(f"VWAP calc error for {ticker}: {e}")
         continue
