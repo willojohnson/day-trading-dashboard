@@ -98,11 +98,22 @@ with placeholder.container():
             st.error(f"Not enough or invalid data for {ticker}.")
             continue
 
-        data.index = data.index.tz_localize(None)
-        data = data.between_time("09:30", "16:00").copy()
+    if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
+        try:
+        typical_price = (data['High'] + data['Low'] + data['Close']) / 3
+        volume = pd.to_numeric(data['Volume'], errors='coerce').fillna(0)
 
-        data['20_MA'] = data['Close'].rolling(window=20).mean()
-        data['50_MA'] = data['Close'].rolling(window=50).mean()
+        tpxv = (typical_price * volume).fillna(0)
+        cum_vol = volume.cumsum().replace(0, 1e-9)
+
+        vwap = tpxv.cumsum() / cum_vol
+        vwap = vwap.fillna(0)
+
+        data.loc[:, 'VWAP'] = vwap
+    except Exception as e:
+        st.warning(f"VWAP calc error for {ticker}: {e}")
+        continue
+
         data['High_Break'] = data['High'].rolling(window=20).max()
         data['Low_Break'] = data['Low'].rolling(window=20).min()
         data['Volume_Surge'] = data['Volume'] > data['Volume'].rolling(window=20).mean() * 1.5
