@@ -11,7 +11,7 @@ import socket
 # --- AI Watchlist ---
 TICKERS = [
     "NVDA", "MSFT", "GOOGL", "AMZN", "META", "TSLA",
-    "PLTR", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP", "TSM", "DDOG", "BTSG"
+    "PLTR", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP", "TSM", "DDOG"
 ]
 
 # --- Leaderboard History ---
@@ -20,7 +20,7 @@ signal_leaderboard = defaultdict(int)
 # --- UI Setup ---
 st.set_page_config(layout="wide")
 st.title("\U0001F4C8 Day Trading Dashboard")
-strategy = st.sidebar.selectbox("Select Strategy", ["Breakout", "Scalping", "Trend Trading"])
+strategy = st.sidebar.selectbox("Select Strategy", ["Breakout", "Scalping", "Trend Trading", "VWAP Rejection", "RSI Overbought"])
 refresh_rate = st.sidebar.slider("Refresh every N seconds", 30, 300, 60, step=10)
 st_autorefresh(interval=refresh_rate * 1000, key="datarefresh")
 
@@ -35,6 +35,12 @@ Short, fast trades triggered by volume surges and a 20MA crossing above 50MA.
 
 **Trend Trading**  
 Looks for steady momentum: 20MA > 50MA means upward trend likely continuing.
+
+**VWAP Rejection**  
+Price breaks above VWAP but closes below it — a bearish rejection.
+
+**RSI Overbought**  
+RSI value above 70 suggests potential pullback.
 """)
 
 # Manual Refresh Button
@@ -81,6 +87,7 @@ with placeholder.container():
         data['Low_Break'] = data['Low'].rolling(window=20).min()
         data['Volume_Surge'] = data['Volume'] > data['Volume'].rolling(window=20).mean() * 1.5
         data['Momentum'] = data['Close'].pct_change().rolling(window=10).sum()
+        data['RSI'] = 100 - (100 / (1 + data['Close'].pct_change().add(1).rolling(14).apply(lambda x: (x[x > 1].mean() / x[x <= 1].mean()) if x[x <= 1].mean() else 1)))
 
         # VWAP Calculation
         if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
@@ -91,7 +98,7 @@ with placeholder.container():
             ) / 3
             volume = data['Volume'].fillna(0).astype(float)
             tpxv = typical_price * volume
-            volume_cumsum = volume.cumsum().replace(0, 1)  # Avoid division by zero
+            volume_cumsum = volume.cumsum().replace(0, 1)
             data['VWAP'] = tpxv.cumsum() / volume_cumsum
 
         signal = ""
@@ -125,6 +132,22 @@ with placeholder.container():
                     signal = f"\U0001F4C8 Trend: {ticker} in uptrend (20MA > 50MA)"
                     trade_flag = True
                     rank_value = data['Momentum'].iloc[-1].item()
+
+            elif strategy == "VWAP Rejection":
+                close = data['Close'].iloc[-1].item()
+                vwap = data['VWAP'].iloc[-1].item()
+                high = data['High'].iloc[-1].item()
+                if pd.notna(close) and pd.notna(vwap) and pd.notna(high) and close < vwap and high > vwap:
+                    signal = f"\U0000274C VWAP Rejection: {ticker} failed breakout below VWAP"
+                    trade_flag = True
+                    rank_value = -abs(data['Momentum'].iloc[-1].item())
+
+            elif strategy == "RSI Overbought":
+                rsi = data['RSI'].iloc[-1]
+                if pd.notna(rsi) and rsi > 70:
+                    signal = f"\U0001F53B RSI Overbought: {ticker} RSI={rsi:.1f}"
+                    trade_flag = True
+                    rank_value = -rsi
         except Exception as e:
             st.warning(f"Error processing {ticker}: {e}")
 
@@ -135,7 +158,7 @@ with placeholder.container():
 
     if ranked_signals:
         st.markdown("### \U0001F4CA Real-Time Signals")
-        ranked_signals.sort(key=lambda x: x[2], reverse=True)
+        ranked_signals.sort(key=lambda x: x[2])
         for ticker, signal, rank in ranked_signals:
             st.success(signal)
 
