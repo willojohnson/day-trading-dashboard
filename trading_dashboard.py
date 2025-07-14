@@ -112,7 +112,8 @@ with placeholder.container():
         if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
             typical_price = (data['High'] + data['Low'] + data['Close']) / 3
             volume = data['Volume'].fillna(0)
-            data['VWAP'] = (typical_price * volume).cumsum() / volume.cumsum().replace(0, 1)
+            if not typical_price.empty and not volume.empty:
+                data['VWAP'] = (typical_price * volume).cumsum() / volume.cumsum().replace(0, 1)
 
         signal = ""
         trade_flag = False
@@ -122,11 +123,11 @@ with placeholder.container():
             close = data['Close'].iloc[-1]
             high = data['High'].iloc[-1]
             low = data['Low'].iloc[-1]
-            vwap = data['VWAP'].iloc[-1]
+            vwap = data['VWAP'].iloc[-1] if 'VWAP' in data.columns else None
             open_ = data['Open'].iloc[-1]
             prev_close = data['Close'].iloc[-2]
 
-            if strategy == "Breakout":
+            if strategy == "Breakout" and pd.notna(close) and pd.notna(vwap):
                 if close > data['High_Break'].iloc[-1] and close > vwap:
                     signal = f"\U0001F514 Breakout: {ticker} above recent high & VWAP"
                     trade_flag = True
@@ -144,7 +145,7 @@ with placeholder.container():
                     trade_flag = True
                     rank_value = data['Momentum'].iloc[-1]
 
-            elif strategy == "VWAP Rejection":
+            elif strategy == "VWAP Rejection" and pd.notna(close) and pd.notna(vwap) and pd.notna(high):
                 if close < vwap and high > vwap:
                     signal = f"\U0000274C VWAP Rejection: {ticker} failed breakout below VWAP"
                     trade_flag = True
@@ -176,7 +177,7 @@ with placeholder.container():
                     trade_flag = True
                     rank_value = -data['Momentum'].iloc[-1]
 
-            elif strategy == "VWAP Retest Fail":
+            elif strategy == "VWAP Retest Fail" and pd.notna(vwap):
                 if data['Close'].iloc[-2] < vwap and close < vwap and high > vwap:
                     signal = f"❌ VWAP Retest Fail: {ticker} could not reclaim VWAP"
                     trade_flag = True
