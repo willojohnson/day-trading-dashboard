@@ -127,8 +127,9 @@ with placeholder.container():
             open_ = data['Open'].iloc[-1]
             prev_close = data['Close'].iloc[-2]
 
-            if strategy == "Breakout" and pd.notna(close) and pd.notna(vwap):
-                if close > data['High_Break'].iloc[-1] and close > vwap:
+            if strategy == "Breakout":
+                condition = (close > data['High_Break'].iloc[-1]) and (close > vwap)
+                if condition:
                     signal = f"\U0001F514 Breakout: {ticker} above recent high & VWAP"
                     trade_flag = True
                     rank_value = data['Momentum'].iloc[-1]
@@ -145,7 +146,7 @@ with placeholder.container():
                     trade_flag = True
                     rank_value = data['Momentum'].iloc[-1]
 
-            elif strategy == "VWAP Rejection" and pd.notna(close) and pd.notna(vwap) and pd.notna(high):
+            elif strategy == "VWAP Rejection":
                 if close < vwap and high > vwap:
                     signal = f"\U0000274C VWAP Rejection: {ticker} failed breakout below VWAP"
                     trade_flag = True
@@ -158,36 +159,31 @@ with placeholder.container():
                     rank_value = -data['RSI'].iloc[-1]
 
             elif strategy == "Lower High + Lower Low":
-                if len(data) > 2 and pd.notna(data['High'].iloc[-1]) and pd.notna(data['High'].iloc[-2]) and pd.notna(data['Low'].iloc[-1]) and pd.notna(data['Low'].iloc[-2]):
-                    if data['High'].iloc[-1] < data['High'].iloc[-2] and data['Low'].iloc[-1] < data['Low'].iloc[-2]:
-                        signal = f"🔻 Bearish Pattern: {ticker} lower high + lower low"
-                        trade_flag = True
-                        rank_value = -data['Momentum'].iloc[-1]
+                if data['High'].iloc[-1] < data['High'].iloc[-2] and data['Low'].iloc[-1] < data['Low'].iloc[-2]:
+                    signal = f"🔻 Bearish Pattern: {ticker} lower high + lower low"
+                    trade_flag = True
+                    rank_value = -data['Momentum'].iloc[-1]
 
             elif strategy == "Volume Spike Down":
-                vol = data['Volume']
-                if len(vol) > 20 and pd.notna(vol.iloc[-1]) and pd.notna(close) and pd.notna(open_):
-                    avg_vol = vol.rolling(window=20).mean().iloc[-1]
-                    if vol.iloc[-1] > avg_vol * 1.5 and close < open_:
-                        signal = f"📉 Volume Spike Down: {ticker} large red candle w/ high volume"
-                        trade_flag = True
-                        rank_value = -abs(data['Momentum'].iloc[-1])
+                avg_vol = data['Volume'].rolling(window=20).mean().iloc[-1]
+                if data['Volume'].iloc[-1] > avg_vol * 1.5 and close < open_:
+                    signal = f"📉 Volume Spike Down: {ticker} large red candle w/ high volume"
+                    trade_flag = True
+                    rank_value = -abs(data['Momentum'].iloc[-1])
 
             elif strategy == "Shooting Star":
-                if pd.notna(close) and pd.notna(open_) and pd.notna(high):
-                    candle_body = abs(close - open_)
-                    upper_wick = high - max(close, open_)
-                    if pd.notna(upper_wick) and pd.notna(candle_body) and upper_wick > candle_body * 2:
-                        signal = f"🌠 Shooting Star: {ticker} — potential intraday reversal"
-                        trade_flag = True
-                        rank_value = -data['Momentum'].iloc[-1]
+                candle_body = abs(close - open_)
+                upper_wick = high - max(close, open_)
+                if upper_wick > candle_body * 2:
+                    signal = f"🌠 Shooting Star: {ticker} — potential intraday reversal"
+                    trade_flag = True
+                    rank_value = -data['Momentum'].iloc[-1]
 
-            elif strategy == "VWAP Retest Fail" and pd.notna(vwap):
-                if len(data) > 2 and pd.notna(data['Close'].iloc[-2]) and pd.notna(high) and pd.notna(close):
-                    if data['Close'].iloc[-2] < vwap and close < vwap and high > vwap:
-                        signal = f"❌ VWAP Retest Fail: {ticker} could not reclaim VWAP"
-                        trade_flag = True
-                        rank_value = -data['Momentum'].iloc[-1]
+            elif strategy == "VWAP Retest Fail":
+                if data['Close'].iloc[-2] < vwap and close < vwap and high > vwap:
+                    signal = f"❌ VWAP Retest Fail: {ticker} could not reclaim VWAP"
+                    trade_flag = True
+                    rank_value = -data['Momentum'].iloc[-1]
 
         except Exception as e:
             st.warning(f"Error processing {ticker}: {e}")
@@ -208,11 +204,9 @@ with placeholder.container():
         st.markdown("### \U0001F3C6 Signal Leaderboard")
         st.dataframe(leaderboard_df)
 
-    # Last updated timestamp and environment info
     environment = "Localhost" if socket.gethostname() == "localhost" else "Streamlit Cloud"
     st.caption(f"Last updated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ({environment})")
 
-    # --- Optional: Download Script from App ---
     try:
         with open(__file__, "r", encoding="utf-8") as f:
             full_code = f.read()
