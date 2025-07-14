@@ -171,7 +171,7 @@ with placeholder.container():
             elif strategy == "Shooting Star":
                 candle_body = abs(close - open_)
                 upper_wick = high - max(close, open_)
-                if upper_wick > candle_body * 2:
+                if pd.notna(upper_wick) and pd.notna(candle_body) and upper_wick > candle_body * 2:
                     signal = f"🌠 Shooting Star: {ticker} — potential intraday reversal"
                     trade_flag = True
                     rank_value = -data['Momentum'].iloc[-1]
