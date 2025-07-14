@@ -20,7 +20,16 @@ signal_leaderboard = defaultdict(int)
 # --- UI Setup ---
 st.set_page_config(layout="wide")
 st.title("\U0001F4C8 Day Trading Dashboard")
-strategy = st.sidebar.selectbox("Select Strategy", ["Breakout", "Scalping", "Trend Trading", "VWAP Rejection", "RSI Overbought"])
+
+bullish_strategies = ["Breakout", "Scalping", "Trend Trading"]
+bearish_strategies = ["VWAP Rejection", "RSI Overbought", "Lower High + Lower Low", "Volume Spike Down", "Shooting Star", "VWAP Retest Fail"]
+
+strategy_type = st.sidebar.radio("Strategy Type", ["Bullish", "Bearish"])
+if strategy_type == "Bullish":
+    strategy = st.sidebar.selectbox("Select Bullish Strategy", bullish_strategies)
+elif strategy_type == "Bearish":
+    strategy = st.sidebar.selectbox("Select Bearish Strategy", bearish_strategies)
+
 refresh_rate = st.sidebar.slider("Refresh every N seconds", 30, 300, 60, step=10)
 st_autorefresh(interval=refresh_rate * 1000, key="datarefresh")
 
@@ -28,19 +37,31 @@ st_autorefresh(interval=refresh_rate * 1000, key="datarefresh")
 st.sidebar.markdown("### \U0001F4D8 Strategy Definitions")
 st.sidebar.markdown("""
 **Breakout**  
-Triggered when price breaks above recent highs *and* trades above intraday VWAP — a sign of bullish conviction.
+Triggered when price breaks above recent highs *and* trades above intraday VWAP.
 
 **Scalping**  
-Short, fast trades triggered by volume surges and a 20MA crossing above 50MA.
+Short trades triggered by volume surges and 20MA > 50MA.
 
 **Trend Trading**  
-Looks for steady momentum: 20MA > 50MA means upward trend likely continuing.
+20MA > 50MA means momentum likely continuing.
 
 **VWAP Rejection**  
-Price breaks above VWAP but closes below it — a bearish rejection.
+Price breaks above VWAP but closes below it.
 
 **RSI Overbought**  
-RSI value above 70 suggests potential pullback.
+RSI above 70 suggests a pullback.
+
+**Lower High + Lower Low**  
+Signals weakening uptrend and possible reversal.
+
+**Volume Spike Down**  
+Large red candle with volume spike.
+
+**Shooting Star**  
+Small body, long upper wick near intraday highs.
+
+**VWAP Retest Fail**  
+Price reclaims VWAP briefly, then drops below.
 """)
 
 # Manual Refresh Button
@@ -78,8 +99,7 @@ with placeholder.container():
             continue
 
         data.index = data.index.tz_localize(None)
-        market_open = data.between_time("09:30", "16:00")
-        data = market_open.copy()
+        data = data.between_time("09:30", "16:00").copy()
 
         data['20_MA'] = data['Close'].rolling(window=20).mean()
         data['50_MA'] = data['Close'].rolling(window=50).mean()
@@ -89,65 +109,79 @@ with placeholder.container():
         data['Momentum'] = data['Close'].pct_change().rolling(window=10).sum()
         data['RSI'] = 100 - (100 / (1 + data['Close'].pct_change().add(1).rolling(14).apply(lambda x: (x[x > 1].mean() / x[x <= 1].mean()) if x[x <= 1].mean() else 1)))
 
-        # VWAP Calculation
         if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
-            typical_price = (
-                data['High'].fillna(0).astype(float) +
-                data['Low'].fillna(0).astype(float) +
-                data['Close'].fillna(0).astype(float)
-            ) / 3
-            volume = data['Volume'].fillna(0).astype(float)
-            tpxv = typical_price * volume
-            volume_cumsum = volume.cumsum().replace(0, 1)
-            data['VWAP'] = tpxv.cumsum() / volume_cumsum
+            typical_price = (data['High'] + data['Low'] + data['Close']) / 3
+            volume = data['Volume'].fillna(0)
+            data['VWAP'] = (typical_price * volume).cumsum() / volume.cumsum().replace(0, 1)
 
         signal = ""
         trade_flag = False
         rank_value = 0
 
         try:
+            close = data['Close'].iloc[-1]
+            high = data['High'].iloc[-1]
+            low = data['Low'].iloc[-1]
+            vwap = data['VWAP'].iloc[-1]
+            open_ = data['Open'].iloc[-1]
+            prev_close = data['Close'].iloc[-2]
+
             if strategy == "Breakout":
-                recent_high = data['High_Break'].iloc[-1].item()
-                current_close = data['Close'].iloc[-1].item()
-                current_vwap = data['VWAP'].iloc[-1].item()
-                if pd.notna(recent_high) and pd.notna(current_close) and pd.notna(current_vwap) \
-                   and current_close > recent_high and current_close > current_vwap:
-                    signal = f"\U0001F514 Breakout: {ticker} above ${recent_high:.2f} & VWAP"
+                if close > data['High_Break'].iloc[-1] and close > vwap:
+                    signal = f"\U0001F514 Breakout: {ticker} above recent high & VWAP"
                     trade_flag = True
-                    rank_value = data['Momentum'].iloc[-1].item()
+                    rank_value = data['Momentum'].iloc[-1]
 
             elif strategy == "Scalping":
-                ma_20 = data['20_MA'].iloc[-1].item()
-                ma_50 = data['50_MA'].iloc[-1].item()
-                volume_surge = bool(data['Volume_Surge'].iloc[-1])
-                if pd.notna(ma_20) and pd.notna(ma_50) and volume_surge and ma_20 > ma_50:
+                if data['20_MA'].iloc[-1] > data['50_MA'].iloc[-1] and data['Volume_Surge'].iloc[-1]:
                     signal = f"⚡ Scalping: {ticker} volume surge & 20MA > 50MA"
                     trade_flag = True
-                    rank_value = data['Volume'].iloc[-1].item()
+                    rank_value = data['Volume'].iloc[-1]
 
             elif strategy == "Trend Trading":
-                ma_20 = data['20_MA'].iloc[-1].item()
-                ma_50 = data['50_MA'].iloc[-1].item()
-                if pd.notna(ma_20) and pd.notna(ma_50) and ma_20 > ma_50:
+                if data['20_MA'].iloc[-1] > data['50_MA'].iloc[-1]:
                     signal = f"\U0001F4C8 Trend: {ticker} in uptrend (20MA > 50MA)"
                     trade_flag = True
-                    rank_value = data['Momentum'].iloc[-1].item()
+                    rank_value = data['Momentum'].iloc[-1]
 
             elif strategy == "VWAP Rejection":
-                close = data['Close'].iloc[-1].item()
-                vwap = data['VWAP'].iloc[-1].item()
-                high = data['High'].iloc[-1].item()
-                if pd.notna(close) and pd.notna(vwap) and pd.notna(high) and close < vwap and high > vwap:
+                if close < vwap and high > vwap:
                     signal = f"\U0000274C VWAP Rejection: {ticker} failed breakout below VWAP"
                     trade_flag = True
-                    rank_value = -abs(data['Momentum'].iloc[-1].item())
+                    rank_value = -abs(data['Momentum'].iloc[-1])
 
             elif strategy == "RSI Overbought":
-                rsi = data['RSI'].iloc[-1]
-                if pd.notna(rsi) and rsi > 70:
-                    signal = f"\U0001F53B RSI Overbought: {ticker} RSI={rsi:.1f}"
+                if data['RSI'].iloc[-1] > 70:
+                    signal = f"\U0001F53B RSI Overbought: {ticker} RSI={data['RSI'].iloc[-1]:.1f}"
                     trade_flag = True
-                    rank_value = -rsi
+                    rank_value = -data['RSI'].iloc[-1]
+
+            elif strategy == "Lower High + Lower Low":
+                if data['High'].iloc[-1] < data['High'].iloc[-2] and data['Low'].iloc[-1] < data['Low'].iloc[-2]:
+                    signal = f"🔻 Bearish Pattern: {ticker} lower high + lower low"
+                    trade_flag = True
+                    rank_value = -data['Momentum'].iloc[-1]
+
+            elif strategy == "Volume Spike Down":
+                if data['Volume'].iloc[-1] > data['Volume'].rolling(window=20).mean().iloc[-1] * 1.5 and close < open_:
+                    signal = f"📉 Volume Spike Down: {ticker} large red candle w/ high volume"
+                    trade_flag = True
+                    rank_value = -abs(data['Momentum'].iloc[-1])
+
+            elif strategy == "Shooting Star":
+                candle_body = abs(close - open_)
+                upper_wick = high - max(close, open_)
+                if upper_wick > candle_body * 2:
+                    signal = f"🌠 Shooting Star: {ticker} — potential intraday reversal"
+                    trade_flag = True
+                    rank_value = -data['Momentum'].iloc[-1]
+
+            elif strategy == "VWAP Retest Fail":
+                if data['Close'].iloc[-2] < vwap and close < vwap and high > vwap:
+                    signal = f"❌ VWAP Retest Fail: {ticker} could not reclaim VWAP"
+                    trade_flag = True
+                    rank_value = -data['Momentum'].iloc[-1]
+
         except Exception as e:
             st.warning(f"Error processing {ticker}: {e}")
 
