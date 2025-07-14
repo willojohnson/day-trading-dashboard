@@ -1,6 +1,9 @@
-streamlit
-yfinance
-pandas
-plotly
-streamlit-autorefresh
-
+import streamlit as st
+import yfinance as yf
+import pandas as pd
+import datetime
+import base64
+import os
+from collections import defaultdict
+from streamlit_autorefresh import st_autorefresh
+import socket
