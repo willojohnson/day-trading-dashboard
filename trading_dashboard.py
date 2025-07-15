@@ -5,7 +5,7 @@ import datetime
 from streamlit_autorefresh import st_autorefresh
 
 # --- Tickers to Monitor ---
-TICKERS = ["NVDA", "MSFT", "GOOGL", "AMZN", "META"]
+TICKERS = ["NVDA", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP", "TSM", "DDOG"]
 
 # --- Page Setup ---
 st.set_page_config(layout="wide")
