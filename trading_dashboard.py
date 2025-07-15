@@ -16,13 +16,14 @@ st.sidebar.header("Dashboard Settings")
 refresh_rate = st.sidebar.slider("Refresh every N seconds", min_value=30, max_value=300, value=60, step=10)
 st_autorefresh(interval=refresh_rate * 1000, key="autorefresh")
 
-strategy = st.sidebar.selectbox("Select Strategy", ["Trend Trading", "RSI Overbought"])
+strategy = st.sidebar.selectbox("Select Strategy", ["Trend Trading", "RSI Overbought", "Scalping"])
 
 # --- Strategy Definitions ---
 st.sidebar.markdown("### 📘 Strategy Definitions")
 st.sidebar.markdown("""
 **Trend Trading**: Shows uptrend signals when 20MA > 50MA  
-**RSI Overbought**: Flags stocks with RSI > 70 for possible pullback
+**RSI Overbought**: Flags stocks with RSI > 70 for possible pullback  
+**Scalping**: Short-term trades triggered by volume surges and 20MA > 50MA
 """)
 
 # --- Data Processing & Signal Generation ---
@@ -45,6 +46,7 @@ for ticker in TICKERS:
         df['50_MA'] = df['Close'].rolling(window=50).mean()
         df['RSI'] = 100 - (100 / (1 + df['Close'].pct_change().add(1).rolling(14).apply(
             lambda x: (x[x > 1].mean() / x[x <= 1].mean()) if x[x <= 1].mean() != 0 else 1, raw=False)))
+        df['Avg_Volume'] = df['Volume'].rolling(window=20).mean()
 
         if strategy == "Trend Trading":
             if pd.notna(df['20_MA'].iloc[-1]) and pd.notna(df['50_MA'].iloc[-1]) and df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1]:
@@ -55,6 +57,12 @@ for ticker in TICKERS:
             if pd.notna(df['RSI'].iloc[-1]) and df['RSI'].iloc[-1] > 70:
                 signal = f"🔺 RSI Overbought: {ticker} RSI={df['RSI'].iloc[-1]:.1f}"
                 signals.append((ticker, signal))
+
+        elif strategy == "Scalping":
+            if pd.notna(df['20_MA'].iloc[-1]) and pd.notna(df['50_MA'].iloc[-1]) and pd.notna(df['Avg_Volume'].iloc[-1]):
+                if df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1] and df['Volume'].iloc[-1] > df['Avg_Volume'].iloc[-1] * 1.5:
+                    signal = f"⚡ Scalping: {ticker} volume spike + 20MA > 50MA"
+                    signals.append((ticker, signal))
 
     except Exception as e:
         st.error(f"❌ Error processing {ticker}: {e}")
