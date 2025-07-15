@@ -72,7 +72,7 @@ for ticker in TICKERS:
             if not all(col in df.columns for col in required_columns):
                 # Handle missing columns - e.g., print an error, log, or skip
                 print(f"Error: Missing required columns for Breakout strategy: {', '.join([col for col in required_columns if col not in df.columns])}")
-                return # Or continue if inside a loop
+                    return # Or continue if inside a loop
 
     except Exception as e:
         st.error(f"❌ Error processing {ticker}: {e}")
