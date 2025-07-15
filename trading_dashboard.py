@@ -76,7 +76,7 @@ def play_alert():
 
 # Create dummy alert file
 with open("alert.mp3", "wb") as f:
-    f.write(b"ID3\x03\x00\x00\x00\x00\x00\x21TIT2\x00\x00\x00\x07\x00\x00\x03Beep\x00\x00")
+    f.write(b"ID3\x03\x00\x00\x00\x00\x00!TIT2\x00\x00\x00\x07\x00\x00\x03Beep\x00\x00")
 
 placeholder = st.empty()
 
@@ -99,6 +99,9 @@ with placeholder.container():
         data['Momentum'] = data['Close'].pct_change().rolling(window=10).sum()
         data['RSI'] = 100 - (100 / (1 + data['Close'].pct_change().add(1).rolling(14).apply(lambda x: (x[x > 1].mean() / x[x <= 1].mean()) if x[x <= 1].mean() else 1)))
 
+        data['20_MA'] = data['Close'].rolling(window=20).mean()
+        data['50_MA'] = data['Close'].rolling(window=50).mean()
+
         signal = ""
         trade_flag = False
         rank_value = 0
@@ -118,18 +121,17 @@ with placeholder.container():
                     rank_value = data['Momentum'].iloc[-1]
 
             elif strategy == "Scalping":
-                data['20_MA'] = data['Close'].rolling(window=20).mean()
-                data['50_MA'] = data['Close'].rolling(window=50).mean()
                 if data['20_MA'].iloc[-1] > data['50_MA'].iloc[-1] and data['Volume_Surge'].iloc[-1]:
                     signal = f"⚡ Scalping: {ticker} volume surge & 20MA > 50MA"
                     trade_flag = True
                     rank_value = data['Volume'].iloc[-1]
 
             elif strategy == "Trend Trading":
-                if data['20_MA'].iloc[-1] > data['50_MA'].iloc[-1]:
-                    signal = f"\U0001F4C8 Trend: {ticker} in uptrend (20MA > 50MA)"
-                    trade_flag = True
-                    rank_value = data['Momentum'].iloc[-1]
+                if '20_MA' in data.columns and '50_MA' in data.columns and not pd.isna(data['20_MA'].iloc[-1]) and not pd.isna(data['50_MA'].iloc[-1]):
+                    if data['20_MA'].iloc[-1] > data['50_MA'].iloc[-1]:
+                        signal = f"\U0001F4C8 Trend: {ticker} in uptrend (20MA > 50MA)"
+                        trade_flag = True
+                        rank_value = data['Momentum'].iloc[-1]
 
             elif strategy == "RSI Overbought":
                 if data['RSI'].iloc[-1] > 70:
