@@ -99,21 +99,22 @@ with placeholder.container():
             st.error(f"Not enough or invalid data for {ticker}.")
             continue
 
-        if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
-            try:
+        try:
+            if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
                 typical_price = ((data['High'].astype(float) + data['Low'].astype(float) + data['Close'].astype(float)) / 3).fillna(0)
-                volume = pd.to_numeric(data['Volume'], errors='coerce').astype(float).fillna(0)
+                volume = pd.to_numeric(data['Volume'], errors='coerce').fillna(0).astype(float)
 
-                if typical_price.ndim != 1 or volume.ndim != 1:
-                    raise ValueError("VWAP calculation inputs must be 1-dimensional Series")
+                if not isinstance(typical_price, pd.Series) or not isinstance(volume, pd.Series):
+                    raise ValueError("VWAP inputs must be Series")
 
-                tpv = typical_price * volume
+                tpv = (typical_price * volume).fillna(0)
                 cum_vol = volume.cumsum().replace(0, 1e-9)
                 vwap = tpv.cumsum() / cum_vol
                 data['VWAP'] = vwap.fillna(0)
-            except Exception as e:
-                st.warning(f"VWAP calc error for {ticker}: {e}")
-                continue
+
+        except Exception as e:
+            st.warning(f"VWAP calc error for {ticker}: {e}")
+            continue
 
         data['High_Break'] = data['High'].rolling(window=20).max()
         data['Low_Break'] = data['Low'].rolling(window=20).min()
@@ -134,8 +135,7 @@ with placeholder.container():
             prev_close = data['Close'].iloc[-2]
 
             if strategy == "Breakout":
-                condition = (close > data['High_Break'].iloc[-1]) and (close > vwap)
-                if condition:
+                if close > data['High_Break'].iloc[-1] and close > vwap:
                     signal = f"\U0001F514 Breakout: {ticker} above recent high & VWAP"
                     trade_flag = True
                     rank_value = data['Momentum'].iloc[-1]
@@ -149,8 +149,6 @@ with placeholder.container():
                     rank_value = data['Volume'].iloc[-1]
 
             elif strategy == "Trend Trading":
-                data['20_MA'] = data['Close'].rolling(window=20).mean()
-                data['50_MA'] = data['Close'].rolling(window=50).mean()
                 if data['20_MA'].iloc[-1] > data['50_MA'].iloc[-1]:
                     signal = f"\U0001F4C8 Trend: {ticker} in uptrend (20MA > 50MA)"
                     trade_flag = True
