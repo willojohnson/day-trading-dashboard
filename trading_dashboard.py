@@ -23,7 +23,10 @@ st.set_page_config(layout="wide")
 st.title("\U0001F4C8 Day Trading Dashboard")
 
 bullish_strategies = ["Breakout", "Scalping", "Trend Trading"]
-bearish_strategies = ["VWAP Rejection", "RSI Overbought", "Lower High + Lower Low", "Volume Spike Down", "Shooting Star", "VWAP Retest Fail"]
+bearish_strategies = [
+    "VWAP Rejection", "RSI Overbought", "Lower High + Lower Low",
+    "Volume Spike Down", "Shooting Star", "VWAP Retest Fail"
+]
 
 strategy_type = st.sidebar.radio("Strategy Type", ["Bullish", "Bearish"])
 if strategy_type == "Bullish":
@@ -106,7 +109,9 @@ with placeholder.container():
 
         if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
             typical_price = ((data['High'] + data['Low'] + data['Close']) / 3).astype(float).fillna(0)
-            volume = pd.to_numeric(data['Volume'], errors='coerce').astype(float).fillna(0)
+            # Guarantee Volume is a 1d Series before to_numeric
+            vol_series = data['Volume'] if isinstance(data['Volume'], pd.Series) else pd.Series(data['Volume'])
+            volume = pd.to_numeric(vol_series, errors='coerce').astype(float).fillna(0)
 
             tpv = (typical_price * volume).fillna(0)
             cum_vol = volume.cumsum().replace(0, 1e-9)
@@ -206,7 +211,10 @@ with placeholder.container():
             st.success(signal)
 
     if signal_leaderboard:
-        leaderboard_df = pd.DataFrame(sorted(signal_leaderboard.items(), key=lambda x: x[1], reverse=True), columns=['Ticker', 'Signal Count'])
+        leaderboard_df = pd.DataFrame(
+            sorted(signal_leaderboard.items(), key=lambda x: x[1], reverse=True),
+            columns=['Ticker', 'Signal Count']
+        )
         st.markdown("### \U0001F3C6 Signal Leaderboard")
         st.dataframe(leaderboard_df)
 
