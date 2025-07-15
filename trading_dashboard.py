@@ -81,6 +81,7 @@ def play_alert():
             </audio>"""
         st.markdown(sound_html, unsafe_allow_html=True)
 
+# Create dummy alert file if needed
 with open("alert.mp3", "wb") as f:
     f.write(b"ID3\x03\x00\x00\x00\x00\x00\x21TIT2\x00\x00\x00\x07\x00\x00\x03Beep\x00\x00")
 
@@ -109,16 +110,18 @@ with placeholder.container():
 
         if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
             typical_price = ((data['High'] + data['Low'] + data['Close']) / 3).astype(float).fillna(0)
-            # Guarantee Volume is a 1d Series before to_numeric
-            vol_series = data['Volume'] if isinstance(data['Volume'], pd.Series) else pd.Series(data['Volume'])
-            volume = pd.to_numeric(vol_series, errors='coerce').astype(float).fillna(0)
-
+            
+            # FIX for 1D 'Volume'
+            volume_arr = np.asarray(data['Volume'])
+            if volume_arr.ndim > 1:
+                volume_arr = volume_arr.ravel()
+            volume = pd.to_numeric(pd.Series(volume_arr, index=data.index), errors='coerce').astype(float).fillna(0)
+            
             tpv = (typical_price * volume).fillna(0)
             cum_vol = volume.cumsum().replace(0, 1e-9)
             vwap = tpv.cumsum() / cum_vol
             data['VWAP'] = vwap.fillna(0)
 
-        # Pre-calculate indicators, handling missing values robustly
         data['High_Break'] = data['High'].rolling(window=20).max()
         data['Low_Break'] = data['Low'].rolling(window=20).min()
         data['Volume_Surge'] = data['Volume'] > data['Volume'].rolling(window=20).mean() * 1.5
