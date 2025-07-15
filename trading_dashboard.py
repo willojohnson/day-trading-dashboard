@@ -59,10 +59,12 @@ for ticker in TICKERS:
                 signals.append((ticker, signal))
 
         elif strategy == "Scalping":
-            if pd.notna(df['20_MA'].iloc[-1]) and pd.notna(df['50_MA'].iloc[-1]) and pd.notna(df['Avg_Volume'].iloc[-1]):
-                if df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1] and df['Volume'].iloc[-1] > df['Avg_Volume'].iloc[-1] * 1.5:
-                    signal = f"⚡ Scalping: {ticker} volume spike + 20MA > 50MA"
-                    signals.append((ticker, signal))
+            # Check for column existence and convert to numeric if needed
+            required_columns = ['20_MA', '50_MA', 'Avg_Volume', 'Volume']
+            if not all(col in df.columns for col in required_columns):
+                # Handle missing columns, e.g., print an error or skip the strategy
+                print(f"Error: Missing required columns for Scalping strategy: {', '.join([col for col in required_columns if col not in df.columns])}")
+                continue # Skip this iteration if columns are missing
 
     except Exception as e:
         st.error(f"❌ Error processing {ticker}: {e}")
