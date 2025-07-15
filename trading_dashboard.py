@@ -16,14 +16,15 @@ st.sidebar.header("Dashboard Settings")
 refresh_rate = st.sidebar.slider("Refresh every N seconds", min_value=30, max_value=300, value=60, step=10)
 st_autorefresh(interval=refresh_rate * 1000, key="autorefresh")
 
-strategy = st.sidebar.selectbox("Select Strategy", ["Trend Trading", "RSI Overbought", "Scalping"])
+strategy = st.sidebar.selectbox("Select Strategy", ["Trend Trading", "RSI Overbought", "Scalping", "Breakout"])
 
 # --- Strategy Definitions ---
 st.sidebar.markdown("### 📘 Strategy Definitions")
 st.sidebar.markdown("""
 **Trend Trading**: Shows uptrend signals when 20MA > 50MA  
 **RSI Overbought**: Flags stocks with RSI > 70 for possible pullback  
-**Scalping**: Short-term trades triggered by volume surges and 20MA > 50MA
+**Scalping**: Short-term trades triggered by volume surges and 20MA > 50MA  
+**Breakout**: Flags when current price breaks above 20-period high
 """)
 
 # --- Data Processing & Signal Generation ---
@@ -47,6 +48,7 @@ for ticker in TICKERS:
         df['RSI'] = 100 - (100 / (1 + df['Close'].pct_change().add(1).rolling(14).apply(
             lambda x: (x[x > 1].mean() / x[x <= 1].mean()) if x[x <= 1].mean() != 0 else 1, raw=False)))
         df['Avg_Volume'] = df['Volume'].rolling(window=20).mean()
+        df['20_High'] = df['High'].rolling(window=20).max()
 
         if strategy == "Trend Trading":
             if pd.notna(df['20_MA'].iloc[-1]) and pd.notna(df['50_MA'].iloc[-1]) and df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1]:
@@ -59,12 +61,16 @@ for ticker in TICKERS:
                 signals.append((ticker, signal))
 
         elif strategy == "Scalping":
-            # Check for column existence and convert to numeric if needed
-            required_columns = ['20_MA', '50_MA', 'Avg_Volume', 'Volume']
-            if not all(col in df.columns for col in required_columns):
-                # Handle missing columns, e.g., print an error or skip the strategy
-                print(f"Error: Missing required columns for Scalping strategy: {', '.join([col for col in required_columns if col not in df.columns])}")
-                continue # Skip this iteration if columns are missing
+            if pd.notna(df['20_MA'].iloc[-1]) and pd.notna(df['50_MA'].iloc[-1]) and df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1]:
+                if df['Volume'].iloc[-1] > 1.5 * df['Avg_Volume'].iloc[-1]:
+                    signal = f"⚡ Scalping: {ticker} volume surge & 20MA > 50MA"
+                    signals.append((ticker, signal))
+
+        elif strategy == "Breakout":
+            if pd.notna(df['Close'].iloc[-1]) and pd.notna(df['20_High'].iloc[-2]):
+                if df['Close'].iloc[-1] > df['20_High'].iloc[-2]:
+                    signal = f"🚀 Breakout: {ticker} new high above 20-bar range"
+                    signals.append((ticker, signal))
 
     except Exception as e:
         st.error(f"❌ Error processing {ticker}: {e}")
