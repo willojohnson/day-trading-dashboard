@@ -101,11 +101,8 @@ with placeholder.container():
 
         try:
             if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
-                typical_price = ((data['High'].astype(float) + data['Low'].astype(float) + data['Close'].astype(float)) / 3).fillna(0)
-                volume = pd.to_numeric(data['Volume'], errors='coerce').fillna(0).astype(float)
-
-                if not isinstance(typical_price, pd.Series) or not isinstance(volume, pd.Series):
-                    raise ValueError("VWAP inputs must be Series")
+                typical_price = ((data['High'] + data['Low'] + data['Close']) / 3).astype(float).fillna(0)
+                volume = pd.to_numeric(data['Volume'], errors='coerce').astype(float).fillna(0)
 
                 tpv = (typical_price * volume).fillna(0)
                 cum_vol = volume.cumsum().replace(0, 1e-9)
