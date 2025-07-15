@@ -22,7 +22,7 @@ signal_leaderboard = defaultdict(int)
 st.set_page_config(layout="wide")
 st.title("\U0001F4C8 Day Trading Dashboard")
 
-bullish_strategies = ["Breakout", "Scalping", "Trend Trading"]
+bullish_strategies = ["Scalping", "Trend Trading"]
 bearish_strategies = ["RSI Overbought", "Lower High + Lower Low", "Volume Spike Down", "Shooting Star"]
 
 strategy_type = st.sidebar.radio("Strategy Type", ["Bullish", "Bearish"])
@@ -37,9 +37,6 @@ st_autorefresh(interval=refresh_rate * 1000, key="datarefresh")
 # Strategy Definitions – Always Visible
 st.sidebar.markdown("### \U0001F4D8 Strategy Definitions")
 st.sidebar.markdown("""
-**Breakout**  
-Triggered when price breaks above recent highs.
-
 **Scalping**  
 Short trades triggered by volume surges and 20MA > 50MA.
 
@@ -93,7 +90,6 @@ with placeholder.container():
             st.error(f"Not enough or invalid data for {ticker}.")
             continue
 
-        data['High_Break'] = data['High'].rolling(window=20).max()
         data['Low_Break'] = data['Low'].rolling(window=20).min()
         data['Volume_Surge'] = data['Volume'] > data['Volume'].rolling(window=20).mean() * 1.5
         data['Momentum'] = data['Close'].pct_change().rolling(window=10).sum()
@@ -113,15 +109,7 @@ with placeholder.container():
             open_ = data['Open'].iloc[-1]
             prev_close = data['Close'].iloc[-2]
 
-            if strategy == "Breakout":
-                if pd.notna(data['High_Break'].iloc[-1]) and pd.notna(close):
-                    last_high = data['High_Break'].iloc[-1]
-                    if np.isscalar(close) and np.isscalar(last_high) and close > last_high:
-                        signal = f"\U0001F514 Breakout: {ticker} above recent high"
-                        trade_flag = True
-                        rank_value = data['Momentum'].iloc[-1] if pd.notna(data['Momentum'].iloc[-1]) else 0
-
-            elif strategy == "Scalping":
+            if strategy == "Scalping":
                 if data['20_MA'].iloc[-1] > data['50_MA'].iloc[-1] and data['Volume_Surge'].iloc[-1]:
                     signal = f"⚡ Scalping: {ticker} volume surge & 20MA > 50MA"
                     trade_flag = True
