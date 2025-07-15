@@ -23,7 +23,7 @@ st.set_page_config(layout="wide")
 st.title("\U0001F4C8 Day Trading Dashboard")
 
 bullish_strategies = ["Breakout", "Scalping", "Trend Trading"]
-bearish_strategies = ["VWAP Rejection", "RSI Overbought", "Lower High + Lower Low", "Volume Spike Down", "Shooting Star", "VWAP Retest Fail"]
+bearish_strategies = ["RSI Overbought", "Lower High + Lower Low", "Volume Spike Down", "Shooting Star"]
 
 strategy_type = st.sidebar.radio("Strategy Type", ["Bullish", "Bearish"])
 if strategy_type == "Bullish":
@@ -38,16 +38,13 @@ st_autorefresh(interval=refresh_rate * 1000, key="datarefresh")
 st.sidebar.markdown("### \U0001F4D8 Strategy Definitions")
 st.sidebar.markdown("""
 **Breakout**  
-Triggered when price breaks above recent highs *and* trades above intraday VWAP.
+Triggered when price breaks above recent highs.
 
 **Scalping**  
 Short trades triggered by volume surges and 20MA > 50MA.
 
 **Trend Trading**  
 20MA > 50MA means momentum likely continuing.
-
-**VWAP Rejection**  
-Price breaks above VWAP but closes below it.
 
 **RSI Overbought**  
 RSI above 70 suggests a pullback.
@@ -60,9 +57,6 @@ Large red candle with volume spike.
 
 **Shooting Star**  
 Small body, long upper wick near intraday highs.
-
-**VWAP Retest Fail**  
-Price reclaims VWAP briefly, then drops below.
 """)
 
 # Manual Refresh Button
@@ -99,18 +93,6 @@ with placeholder.container():
             st.error(f"Not enough or invalid data for {ticker}.")
             continue
 
-        try:
-            if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
-                typical_price = ((data['High'] + data['Low'] + data['Close']) / 3).fillna(0)
-                volume = pd.to_numeric(data['Volume'], errors='coerce').fillna(0)
-                tpv = (typical_price * volume).fillna(0)
-                cum_vol = volume.cumsum().replace(0, 1e-9)
-                vwap = tpv.cumsum() / cum_vol
-                data['VWAP'] = vwap.fillna(0)
-        except Exception as e:
-            st.warning(f"VWAP calc error for {ticker}: {e}")
-            continue
-
         data['High_Break'] = data['High'].rolling(window=20).max()
         data['Low_Break'] = data['Low'].rolling(window=20).min()
         data['Volume_Surge'] = data['Volume'] > data['Volume'].rolling(window=20).mean() * 1.5
@@ -125,13 +107,12 @@ with placeholder.container():
             close = data['Close'].iloc[-1]
             high = data['High'].iloc[-1]
             low = data['Low'].iloc[-1]
-            vwap_val = data['VWAP'].iloc[-1] if 'VWAP' in data.columns else None
             open_ = data['Open'].iloc[-1]
             prev_close = data['Close'].iloc[-2]
 
             if strategy == "Breakout":
-                if close > data['High_Break'].iloc[-1] and close > vwap_val:
-                    signal = f"\U0001F514 Breakout: {ticker} above recent high & VWAP"
+                if close > data['High_Break'].iloc[-1]:
+                    signal = f"\U0001F514 Breakout: {ticker} above recent high"
                     trade_flag = True
                     rank_value = data['Momentum'].iloc[-1]
 
@@ -148,12 +129,6 @@ with placeholder.container():
                     signal = f"\U0001F4C8 Trend: {ticker} in uptrend (20MA > 50MA)"
                     trade_flag = True
                     rank_value = data['Momentum'].iloc[-1]
-
-            elif strategy == "VWAP Rejection":
-                if close < vwap_val and high > vwap_val:
-                    signal = f"❌ VWAP Rejection: {ticker} failed breakout below VWAP"
-                    trade_flag = True
-                    rank_value = -abs(data['Momentum'].iloc[-1])
 
             elif strategy == "RSI Overbought":
                 if data['RSI'].iloc[-1] > 70:
@@ -179,12 +154,6 @@ with placeholder.container():
                 upper_wick = high - max(close, open_)
                 if upper_wick > candle_body * 2:
                     signal = f"🌠 Shooting Star: {ticker} — potential intraday reversal"
-                    trade_flag = True
-                    rank_value = -data['Momentum'].iloc[-1]
-
-            elif strategy == "VWAP Retest Fail":
-                if data['Close'].iloc[-2] < vwap_val and close < vwap_val and high > vwap_val:
-                    signal = f"❌ VWAP Retest Fail: {ticker} could not reclaim VWAP"
                     trade_flag = True
                     rank_value = -data['Momentum'].iloc[-1]
 
