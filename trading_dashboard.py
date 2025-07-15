@@ -111,7 +111,8 @@ with placeholder.container():
             prev_close = data['Close'].iloc[-2]
 
             if strategy == "Breakout":
-                if close > data['High_Break'].iloc[-1]:
+                high_break = data['High_Break'].dropna()
+                if not high_break.empty and close > high_break.iloc[-1]:
                     signal = f"\U0001F514 Breakout: {ticker} above recent high"
                     trade_flag = True
                     rank_value = data['Momentum'].iloc[-1]
