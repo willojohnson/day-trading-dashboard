@@ -128,11 +128,24 @@ with placeholder.container():
                     trade_flag = True
                     rank_value = -data['RSI'].iloc[-1]
 
-            elif strategy == "Lower High + Lower Low":
-                if data['High'].iloc[-1] < data['High'].iloc[-2] and data['Low'].iloc[-1] < data['Low'].iloc[-2]:
-                    signal = f"🔻 Bearish Pattern: {ticker} lower high + lower low"
-                    trade_flag = True
-                    rank_value = -data['Momentum'].iloc[-1]
+elif strategy == "Lower High + Lower Low":
+    if len(data) >= 2:
+        if data['High'].iloc[-1] < data['High'].iloc[-2] and data['Low'].iloc[-1] < data['Low'].iloc[-2]:
+            signal = f"🔻 Bearish Pattern: {ticker} lower high + lower low"
+            trade_flag = True
+            # Make sure 'Momentum' exists and is not NaN
+            if 'Momentum' in data.columns and pd.notna(data['Momentum'].iloc[-1]):
+                rank_value = -data['Momentum'].iloc[-1]
+            else:
+                rank_value = None  # or set an appropriate default/fallback
+        else:
+            signal = None
+            trade_flag = False
+            rank_value = None
+    else:
+        signal = None
+        trade_flag = False
+        rank_value = None
 
             elif strategy == "Volume Spike Down":
                 avg_vol = data['Volume'].rolling(window=20).mean().iloc[-1]
