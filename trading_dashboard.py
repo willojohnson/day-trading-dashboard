@@ -71,10 +71,9 @@ def play_alert():
             </audio>"""
         st.markdown(sound_html, unsafe_allow_html=True)
 
-# Create dummy alert file if not exists
-if not os.path.exists("alert.mp3"):
-    with open("alert.mp3", "wb") as f:
-        f.write(b"ID3\x03\x00\x00\x00\x00\x00!TIT2\x00\x00\x00\x07\x00\x00\x03Beep\x00\x00")
+# Create dummy alert file
+with open("alert.mp3", "wb") as f:
+    f.write(b"ID3\x03\x00\x00\x00\x00\x00!TIT2\x00\x00\x00\x07\x00\x00\x03Beep\x00\x00")
 
 placeholder = st.empty()
 
@@ -94,24 +93,15 @@ with placeholder.container():
         data['Low_Break'] = data['Low'].rolling(window=20).min()
         data['Volume_Surge'] = data['Volume'] > data['Volume'].rolling(window=20).mean() * 1.5
         data['Momentum'] = data['Close'].pct_change().rolling(window=10).sum()
-        # Safe RSI calculation, handle zeros in denominator
-        def safe_rsi(series):
-            up = series[series > 1].mean()
-            down = series[series <= 1].mean()
-            denom = down if down else 1
-            return (up / denom) if denom else 1
-        data['RSI'] = 100 - (
-            100 / (
-                1 + data['Close'].pct_change().add(1).rolling(14).apply(safe_rsi)
-            )
-        )
+        data['RSI'] = 100 - (100 / (1 + data['Close'].pct_change().add(1).rolling(14).apply(
+            lambda x: (x[x > 1].mean() / x[x <= 1].mean()) if x[x <= 1].mean() and x[x <= 1].mean() != 0 else 1)))
 
         data['20_MA'] = data['Close'].rolling(window=20).mean()
         data['50_MA'] = data['Close'].rolling(window=50).mean()
 
-        signal = None
+        signal = ""
         trade_flag = False
-        rank_value = None
+        rank_value = 0
 
         try:
             close = data['Close'].iloc[-1]
@@ -121,73 +111,36 @@ with placeholder.container():
             prev_close = data['Close'].iloc[-2]
 
             if strategy == "Scalping":
-                if (
-                    not pd.isna(data['20_MA'].iloc[-1])
-                    and not pd.isna(data['50_MA'].iloc[-1])
-                    and data['20_MA'].iloc[-1] > data['50_MA'].iloc[-1]
-                    and data['Volume_Surge'].iloc[-1]
-                ):
+                if data['20_MA'].iloc[-1] > data['50_MA'].iloc[-1] and data['Volume_Surge'].iloc[-1]:
                     signal = f"⚡ Scalping: {ticker} volume surge & 20MA > 50MA"
                     trade_flag = True
                     rank_value = data['Volume'].iloc[-1]
 
             elif strategy == "Trend Trading":
-                if (
-                    '20_MA' in data.columns and '50_MA' in data.columns
-                    and not pd.isna(data['20_MA'].iloc[-1])
-                    and not pd.isna(data['50_MA'].iloc[-1])
-                ):
+                if '20_MA' in data.columns and '50_MA' in data.columns and not pd.isna(data['20_MA'].iloc[-1]) and not pd.isna(data['50_MA'].iloc[-1]):
                     if data['20_MA'].iloc[-1] > data['50_MA'].iloc[-1]:
                         signal = f"\U0001F4C8 Trend: {ticker} in uptrend (20MA > 50MA)"
                         trade_flag = True
-                        if 'Momentum' in data.columns and not pd.isna(data['Momentum'].iloc[-1]):
-                            rank_value = data['Momentum'].iloc[-1]
-                        else:
-                            rank_value = None
+                        rank_value = data['Momentum'].iloc[-1]
 
             elif strategy == "RSI Overbought":
-                if (
-                    'RSI' in data.columns
-                    and not pd.isna(data['RSI'].iloc[-1])
-                    and data['RSI'].iloc[-1] > 70
-                ):
+                if data['RSI'].iloc[-1] > 70:
                     signal = f"\U0001F53B RSI Overbought: {ticker} RSI={data['RSI'].iloc[-1]:.1f}"
                     trade_flag = True
                     rank_value = -data['RSI'].iloc[-1]
 
             elif strategy == "Lower High + Lower Low":
-                if len(data) >= 2:
-                    if (
-                        data['High'].iloc[-1] < data['High'].iloc[-2]
-                        and data['Low'].iloc[-1] < data['Low'].iloc[-2]
-                    ):
-                        signal = f"🔻 Bearish Pattern: {ticker} lower high + lower low"
-                        trade_flag = True
-                        if 'Momentum' in data.columns and pd.notna(data['Momentum'].iloc[-1]):
-                            rank_value = -data['Momentum'].iloc[-1]
-                        else:
-                            rank_value = None
-                    else:
-                        signal = None
-                        trade_flag = False
-                        rank_value = None
-                else:
-                    signal = None
-                    trade_flag = False
-                    rank_value = None
+                if data['High'].iloc[-1] < data['High'].iloc[-2] and data['Low'].iloc[-1] < data['Low'].iloc[-2]:
+                    signal = f"🔻 Bearish Pattern: {ticker} lower high + lower low"
+                    trade_flag = True
+                    rank_value = -data['Momentum'].iloc[-1]
 
             elif strategy == "Volume Spike Down":
                 avg_vol = data['Volume'].rolling(window=20).mean().iloc[-1]
-                if (
-                    data['Volume'].iloc[-1] > avg_vol * 1.5
-                    and close < open_
-                ):
+                if data['Volume'].iloc[-1] > avg_vol * 1.5 and close < open_:
                     signal = f"📉 Volume Spike Down: {ticker} large red candle w/ high volume"
                     trade_flag = True
-                    if 'Momentum' in data.columns and not pd.isna(data['Momentum'].iloc[-1]):
-                        rank_value = -abs(data['Momentum'].iloc[-1])
-                    else:
-                        rank_value = None
+                    rank_value = -abs(data['Momentum'].iloc[-1])
 
             elif strategy == "Shooting Star":
                 candle_body = abs(close - open_)
@@ -195,10 +148,7 @@ with placeholder.container():
                 if upper_wick > candle_body * 2:
                     signal = f"🌠 Shooting Star: {ticker} — potential intraday reversal"
                     trade_flag = True
-                    if 'Momentum' in data.columns and not pd.isna(data['Momentum'].iloc[-1]):
-                        rank_value = -data['Momentum'].iloc[-1]
-                    else:
-                        rank_value = None
+                    rank_value = -data['Momentum'].iloc[-1]
 
         except Exception as e:
             st.warning(f"Error processing {ticker}: {e}")
@@ -210,16 +160,12 @@ with placeholder.container():
 
     if ranked_signals:
         st.markdown("### \U0001F4CA Real-Time Signals")
-        # Sort so highest ranked signal (highest value) at top; for negative ranks, use reverse sort
-        ranked_signals.sort(key=lambda x: (x[2] if x[2] is not None else float('-inf')), reverse=True)
+        ranked_signals.sort(key=lambda x: x[2])
         for ticker, signal, rank in ranked_signals:
             st.success(signal)
 
     if signal_leaderboard:
-        leaderboard_df = pd.DataFrame(
-            sorted(signal_leaderboard.items(), key=lambda x: x[1], reverse=True),
-            columns=["Ticker", "Signal Count"]
-        )
+        leaderboard_df = pd.DataFrame(sorted(signal_leaderboard.items(), key=lambda x: x[1], reverse=True), columns=['Ticker', 'Signal Count'])
         st.markdown("### \U0001F3C6 Signal Leaderboard")
         st.dataframe(leaderboard_df)
 
@@ -227,14 +173,9 @@ with placeholder.container():
     st.caption(f"Last updated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ({environment})")
 
     try:
-        full_code = ""
-        # __file__ may not exist in some Streamlit or cloud environments
-        if "__file__" in globals():
-            with open(__file__, "r", encoding="utf-8") as f:
-                full_code = f.read()
-        else:
-            full_code = "# Source code not available in this environment."
-    except Exception:
+        with open(__file__, "r", encoding="utf-8") as f:
+            full_code = f.read()
+    except:
         full_code = "# Source code not available in this environment."
 
     st.download_button(
