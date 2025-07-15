@@ -67,10 +67,12 @@ for ticker in TICKERS:
                     signals.append((ticker, signal))
 
         elif strategy == "Breakout":
-            if pd.notna(df['Close'].iloc[-1]) and pd.notna(df['20_High'].iloc[-2]):
-                if df['Close'].iloc[-1] > df['20_High'].iloc[-2]:
-                    signal = f"🚀 Breakout: {ticker} new high above 20-bar range"
-                    signals.append((ticker, signal))
+            # 1. Ensure required columns exist in the DataFrame
+            required_columns = ['Close', '20_High']
+            if not all(col in df.columns for col in required_columns):
+                # Handle missing columns - e.g., print an error, log, or skip
+                print(f"Error: Missing required columns for Breakout strategy: {', '.join([col for col in required_columns if col not in df.columns])}")
+                return # Or continue if inside a loop
 
     except Exception as e:
         st.error(f"❌ Error processing {ticker}: {e}")
