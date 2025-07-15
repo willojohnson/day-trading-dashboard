@@ -44,15 +44,15 @@ for ticker in TICKERS:
         df['20_MA'] = df['Close'].rolling(window=20).mean()
         df['50_MA'] = df['Close'].rolling(window=50).mean()
         df['RSI'] = 100 - (100 / (1 + df['Close'].pct_change().add(1).rolling(14).apply(
-            lambda x: (x[x > 1].mean() / x[x <= 1].mean()) if x[x <= 1].mean() != 0 else 1)))
+            lambda x: (x[x > 1].mean() / x[x <= 1].mean()) if x[x <= 1].mean() != 0 else 1, raw=False)))
 
         if strategy == "Trend Trading":
-            if df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1]:
+            if pd.notna(df['20_MA'].iloc[-1]) and pd.notna(df['50_MA'].iloc[-1]) and df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1]:
                 signal = f"📈 Trend: {ticker} 20MA > 50MA"
                 signals.append((ticker, signal))
 
         elif strategy == "RSI Overbought":
-            if df['RSI'].iloc[-1] > 70:
+            if pd.notna(df['RSI'].iloc[-1]) and df['RSI'].iloc[-1] > 70:
                 signal = f"🔺 RSI Overbought: {ticker} RSI={df['RSI'].iloc[-1]:.1f}"
                 signals.append((ticker, signal))
 
