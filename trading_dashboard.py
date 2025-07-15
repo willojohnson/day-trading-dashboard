@@ -115,10 +115,10 @@ with placeholder.container():
 
             if strategy == "Breakout":
                 high_break = data['High_Break'].dropna()
-                if not high_break.empty and close > float(high_break.iloc[-1]):
+                if not high_break.empty and pd.notna(close) and close > high_break.iloc[-1]:
                     signal = f"\U0001F514 Breakout: {ticker} above recent high"
                     trade_flag = True
-                    rank_value = data['Momentum'].iloc[-1]
+                    rank_value = data['Momentum'].iloc[-1] if pd.notna(data['Momentum'].iloc[-1]) else 0
 
             elif strategy == "Scalping":
                 if data['20_MA'].iloc[-1] > data['50_MA'].iloc[-1] and data['Volume_Surge'].iloc[-1]:
