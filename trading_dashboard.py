@@ -116,7 +116,7 @@ with placeholder.container():
             if strategy == "Breakout":
                 if pd.notna(data['High_Break'].iloc[-1]) and pd.notna(close):
                     last_high = data['High_Break'].iloc[-1]
-                    if close > last_high:
+                    if np.isscalar(close) and np.isscalar(last_high) and close > last_high:
                         signal = f"\U0001F514 Breakout: {ticker} above recent high"
                         trade_flag = True
                         rank_value = data['Momentum'].iloc[-1] if pd.notna(data['Momentum'].iloc[-1]) else 0
