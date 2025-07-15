@@ -133,11 +133,11 @@ elif strategy == "Lower High + Lower Low":
         if data['High'].iloc[-1] < data['High'].iloc[-2] and data['Low'].iloc[-1] < data['Low'].iloc[-2]:
             signal = f"🔻 Bearish Pattern: {ticker} lower high + lower low"
             trade_flag = True
-            # Make sure 'Momentum' exists and is not NaN
+            # Safely access 'Momentum'
             if 'Momentum' in data.columns and pd.notna(data['Momentum'].iloc[-1]):
                 rank_value = -data['Momentum'].iloc[-1]
             else:
-                rank_value = None  # or set an appropriate default/fallback
+                rank_value = None  # Fallback value if 'Momentum' is missing or NaN
         else:
             signal = None
             trade_flag = False
@@ -146,6 +146,7 @@ elif strategy == "Lower High + Lower Low":
         signal = None
         trade_flag = False
         rank_value = None
+
 
             elif strategy == "Volume Spike Down":
                 avg_vol = data['Volume'].rolling(window=20).mean().iloc[-1]
