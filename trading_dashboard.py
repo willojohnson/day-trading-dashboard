@@ -65,11 +65,9 @@ Small body, long upper wick near intraday highs.
 Price reclaims VWAP briefly, then drops below.
 """)
 
-# Manual Refresh Button
 if st.sidebar.button("\U0001F501 Refresh Now"):
     st.rerun()
 
-# Sound alert function
 def play_alert():
     sound_file_path = "alert.mp3"
     if os.path.exists(sound_file_path):
@@ -80,11 +78,18 @@ def play_alert():
             </audio>"""
         st.markdown(sound_html, unsafe_allow_html=True)
 
-# Create dummy alert file
 with open("alert.mp3", "wb") as f:
     f.write(b"ID3\x03\x00\x00\x00\x00\x00\x21TIT2\x00\x00\x00\x07\x00\x00\x03Beep\x00\x00")
 
 placeholder = st.empty()
+
+def compute_rsi(series, window=14):
+    delta = series.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=window, min_periods=window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=window, min_periods=window).mean()
+    rs = gain / (loss.replace(0, np.nan))
+    rsi = 100 - (100 / (1 + rs))
+    return rsi.fillna(0)
 
 with placeholder.container():
     now = datetime.datetime.now()
@@ -99,25 +104,23 @@ with placeholder.container():
             st.error(f"Not enough or invalid data for {ticker}.")
             continue
 
-        try:
-            if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
-                typical_price = ((data['High'] + data['Low'] + data['Close']) / 3).astype(float).fillna(0)
-                volume = pd.to_numeric(data['Volume'], errors='coerce').astype(float).fillna(0)
+        if all(col in data.columns for col in ['High', 'Low', 'Close', 'Volume']):
+            typical_price = ((data['High'] + data['Low'] + data['Close']) / 3).astype(float).fillna(0)
+            volume = pd.to_numeric(data['Volume'], errors='coerce').astype(float).fillna(0)
 
-                tpv = (typical_price * volume).fillna(0)
-                cum_vol = volume.cumsum().replace(0, 1e-9)
-                vwap = tpv.cumsum() / cum_vol
-                data['VWAP'] = vwap.fillna(0)
+            tpv = (typical_price * volume).fillna(0)
+            cum_vol = volume.cumsum().replace(0, 1e-9)
+            vwap = tpv.cumsum() / cum_vol
+            data['VWAP'] = vwap.fillna(0)
 
-        except Exception as e:
-            st.warning(f"VWAP calc error for {ticker}: {e}")
-            continue
-
+        # Pre-calculate indicators, handling missing values robustly
         data['High_Break'] = data['High'].rolling(window=20).max()
         data['Low_Break'] = data['Low'].rolling(window=20).min()
         data['Volume_Surge'] = data['Volume'] > data['Volume'].rolling(window=20).mean() * 1.5
         data['Momentum'] = data['Close'].pct_change().rolling(window=10).sum()
-        data['RSI'] = 100 - (100 / (1 + data['Close'].pct_change().add(1).rolling(14).apply(lambda x: (x[x > 1].mean() / x[x <= 1].mean()) if x[x <= 1].mean() else 1)))
+        data['20_MA'] = data['Close'].rolling(window=20).mean()
+        data['50_MA'] = data['Close'].rolling(window=50).mean()
+        data['RSI'] = compute_rsi(data['Close'])
 
         signal = ""
         trade_flag = False
@@ -132,95 +135,3 @@ with placeholder.container():
             prev_close = data['Close'].iloc[-2]
 
             if strategy == "Breakout":
-                if close > data['High_Break'].iloc[-1] and close > vwap:
-                    signal = f"\U0001F514 Breakout: {ticker} above recent high & VWAP"
-                    trade_flag = True
-                    rank_value = data['Momentum'].iloc[-1]
-
-            elif strategy == "Scalping":
-                data['20_MA'] = data['Close'].rolling(window=20).mean()
-                data['50_MA'] = data['Close'].rolling(window=50).mean()
-                if data['20_MA'].iloc[-1] > data['50_MA'].iloc[-1] and data['Volume_Surge'].iloc[-1]:
-                    signal = f"⚡ Scalping: {ticker} volume surge & 20MA > 50MA"
-                    trade_flag = True
-                    rank_value = data['Volume'].iloc[-1]
-
-            elif strategy == "Trend Trading":
-                if data['20_MA'].iloc[-1] > data['50_MA'].iloc[-1]:
-                    signal = f"\U0001F4C8 Trend: {ticker} in uptrend (20MA > 50MA)"
-                    trade_flag = True
-                    rank_value = data['Momentum'].iloc[-1]
-
-            elif strategy == "VWAP Rejection":
-                if close < vwap and high > vwap:
-                    signal = f"❌ VWAP Rejection: {ticker} failed breakout below VWAP"
-                    trade_flag = True
-                    rank_value = -abs(data['Momentum'].iloc[-1])
-
-            elif strategy == "RSI Overbought":
-                if data['RSI'].iloc[-1] > 70:
-                    signal = f"\U0001F53B RSI Overbought: {ticker} RSI={data['RSI'].iloc[-1]:.1f}"
-                    trade_flag = True
-                    rank_value = -data['RSI'].iloc[-1]
-
-            elif strategy == "Lower High + Lower Low":
-                if data['High'].iloc[-1] < data['High'].iloc[-2] and data['Low'].iloc[-1] < data['Low'].iloc[-2]:
-                    signal = f"🔻 Bearish Pattern: {ticker} lower high + lower low"
-                    trade_flag = True
-                    rank_value = -data['Momentum'].iloc[-1]
-
-            elif strategy == "Volume Spike Down":
-                avg_vol = data['Volume'].rolling(window=20).mean().iloc[-1]
-                if data['Volume'].iloc[-1] > avg_vol * 1.5 and close < open_:
-                    signal = f"📉 Volume Spike Down: {ticker} large red candle w/ high volume"
-                    trade_flag = True
-                    rank_value = -abs(data['Momentum'].iloc[-1])
-
-            elif strategy == "Shooting Star":
-                candle_body = abs(close - open_)
-                upper_wick = high - max(close, open_)
-                if upper_wick > candle_body * 2:
-                    signal = f"🌠 Shooting Star: {ticker} — potential intraday reversal"
-                    trade_flag = True
-                    rank_value = -data['Momentum'].iloc[-1]
-
-            elif strategy == "VWAP Retest Fail":
-                if data['Close'].iloc[-2] < vwap and close < vwap and high > vwap:
-                    signal = f"❌ VWAP Retest Fail: {ticker} could not reclaim VWAP"
-                    trade_flag = True
-                    rank_value = -data['Momentum'].iloc[-1]
-
-        except Exception as e:
-            st.warning(f"Error processing {ticker}: {e}")
-
-        if trade_flag:
-            ranked_signals.append((ticker, signal, rank_value))
-            signal_leaderboard[ticker] += 1
-            play_alert()
-
-    if ranked_signals:
-        st.markdown("### \U0001F4CA Real-Time Signals")
-        ranked_signals.sort(key=lambda x: x[2])
-        for ticker, signal, rank in ranked_signals:
-            st.success(signal)
-
-    if signal_leaderboard:
-        leaderboard_df = pd.DataFrame(sorted(signal_leaderboard.items(), key=lambda x: x[1], reverse=True), columns=['Ticker', 'Signal Count'])
-        st.markdown("### \U0001F3C6 Signal Leaderboard")
-        st.dataframe(leaderboard_df)
-
-    environment = "Localhost" if socket.gethostname() == "localhost" else "Streamlit Cloud"
-    st.caption(f"Last updated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ({environment})")
-
-    try:
-        with open(__file__, "r", encoding="utf-8") as f:
-            full_code = f.read()
-    except:
-        full_code = "# Source code not available in this environment."
-
-    st.download_button(
-        label="\U0001F4E5 Download Updated Script",
-        data=full_code,
-        file_name="trading_dashboard.py",
-        mime="text/plain"
-    )
