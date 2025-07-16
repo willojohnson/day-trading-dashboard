@@ -89,7 +89,7 @@ for ticker in TICKERS:
             df['Lower_Band'] = df['20_MA'] - (df['20_STD'] * 2)
             df['Bandwidth'] = df['Upper_Band'] - df['Lower_Band']
                 if pd.notna(df['MACD'].iloc[-2]) and pd.notna(df['MACD_Signal'].iloc[-2]) and pd.notna(df['MACD'].iloc[-1]) and pd.notna(df['MACD_Signal'].iloc[-1]):
-                if df['MACD'].iloc[-2] > df['MACD_Signal'].iloc[-2] and df['MACD'].iloc[-1] < df['MACD_Signal'].iloc[-1]:
+                    if df['MACD'].iloc[-2] > df['MACD_Signal'].iloc[-2] and df['MACD'].iloc[-1] < df['MACD_Signal'].iloc[-1]:
                     signal = f"📉 MACD Bearish Crossover: {ticker}"
                     signals.append((ticker, signal))
 
