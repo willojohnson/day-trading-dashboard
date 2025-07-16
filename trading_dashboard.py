@@ -16,7 +16,7 @@ st.sidebar.header("Dashboard Settings")
 refresh_rate = st.sidebar.slider("Refresh every N seconds", min_value=30, max_value=300, value=60, step=10)
 st_autorefresh(interval=refresh_rate * 1000, key="autorefresh")
 
-strategy = st.sidebar.selectbox("Select Strategy", ["Trend Trading", "RSI Overbought", "RSI Oversold", "MACD Crossover"])
+strategy = st.sidebar.selectbox("Select Strategy", ["Trend Trading", "RSI Overbought", "RSI Oversold", "MACD Bullish Crossover", "MACD Bearish Crossover"])
 
 # --- Strategy Definitions ---
 st.sidebar.markdown("### 📘 Strategy Definitions")
@@ -24,7 +24,8 @@ st.sidebar.markdown("""
 **Trend Trading**: Shows uptrend signals when 20MA > 50MA  
 **RSI Overbought**: Flags stocks with RSI > 70 for possible pullback  
 **RSI Oversold**: Flags stocks with RSI < 30 for potential bounce  
-**MACD Crossover**: Flags bullish crossovers using fast MACD settings (3, 10, 16)
+**MACD Bullish Crossover**: Fast MACD line crosses above Signal line using (3, 10, 16)  
+**MACD Bearish Crossover**: Fast MACD line crosses below Signal line using (3, 10, 16)
 """)
 
 # --- Data Processing & Signal Generation ---
@@ -69,10 +70,16 @@ for ticker in TICKERS:
                 signal = f"🔻 RSI Oversold: {ticker} RSI={df['RSI'].iloc[-1]:.1f}"
                 signals.append((ticker, signal))
 
-        elif strategy == "MACD Crossover":
+        elif strategy == "MACD Bullish Crossover":
             if pd.notna(df['MACD'].iloc[-2]) and pd.notna(df['MACD_Signal'].iloc[-2]) and pd.notna(df['MACD'].iloc[-1]) and pd.notna(df['MACD_Signal'].iloc[-1]):
                 if df['MACD'].iloc[-2] < df['MACD_Signal'].iloc[-2] and df['MACD'].iloc[-1] > df['MACD_Signal'].iloc[-1]:
                     signal = f"📊 MACD Bullish Crossover: {ticker}"
+                    signals.append((ticker, signal))
+
+        elif strategy == "MACD Bearish Crossover":
+            if pd.notna(df['MACD'].iloc[-2]) and pd.notna(df['MACD_Signal'].iloc[-2]) and pd.notna(df['MACD'].iloc[-1]) and pd.notna(df['MACD_Signal'].iloc[-1]):
+                if df['MACD'].iloc[-2] > df['MACD_Signal'].iloc[-2] and df['MACD'].iloc[-1] < df['MACD_Signal'].iloc[-1]:
+                    signal = f"📉 MACD Bearish Crossover: {ticker}"
                     signals.append((ticker, signal))
 
     except Exception as e:
