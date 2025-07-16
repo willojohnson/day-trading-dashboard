@@ -65,7 +65,8 @@ for ticker in TICKERS:
         avg_gain = gain.ewm(com=13, adjust=False).mean()
         avg_loss = loss.ewm(com=13, adjust=False).mean()
 
-        rs = avg_gain / avg_loss
+        # Handle division by zero for rs
+        rs = avg_gain / avg_loss.replace(0, 1e-9)  # Add a small epsilon to avoid division by zero
         df['RSI'] = 100 - (100 / (1 + rs))
 
         df['Avg_Volume'] = df['Volume'].rolling(window=20).mean()
@@ -125,10 +126,7 @@ for ticker in TICKERS:
     except Exception as e:
         st.error(f"❌ Error processing {ticker}: {e}")
 
----
-
-### Display Signals
-
+# --- Display Signals ---
 if signals:
     st.markdown("### ✅ Current Trade Signals")
     for _, msg in signals:
