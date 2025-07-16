@@ -68,11 +68,14 @@ for ticker in TICKERS:
 
         elif strategy == "Breakout":
             required_columns = ['Close', '20_High']
-            if all(col in df.columns for col in required_columns):
-                if pd.notna(df['Close'].iloc[-1]) and pd.notna(df['20_High'].iloc[-2]):
-                    if df['Close'].iloc[-1] > df['20_High'].iloc[-2]:
-                        signal = f"🔹 Breakout: {ticker} price > 20-period high"
-                        signals.append((ticker, signal))
+            
+            # Check if all required columns exist
+            if not all(col in df.columns for col in required_columns):
+                # Handle the error, e.g., log, print, or skip this ticker/iteration
+                print(f"Error: Missing required columns for Breakout strategy for {ticker}: {', '.join([col for col in required_columns if col not in df.columns])}")
+                # You can choose to 'return' if this is within a function and you want to exit it
+                # Or 'continue' if this is within a loop and you want to skip to the next iteration
+                return 
 
     except Exception as e:
         st.error(f"❌ Error processing {ticker}: {e}")
