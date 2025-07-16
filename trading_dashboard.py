@@ -21,73 +21,117 @@ strategy = st.sidebar.selectbox("Select Strategy", ["Trend Trading", "RSI Overbo
 # --- Strategy Definitions ---
 st.sidebar.markdown("### 📘 Strategy Definitions")
 st.sidebar.markdown("""
-**Trend Trading**: Shows uptrend signals when 20MA > 50MA  
-**RSI Overbought**: Flags stocks with RSI > 70 for possible pullback  
-**Scalping**: Short-term trades triggered by volume surges and 20MA > 50MA  
-**Breakout**: Flags when current price breaks above 20-period high  
+**Trend Trading**: Shows uptrend signals when 20MA > 50MA
+**RSI Overbought**: Flags stocks with RSI > 70 for possible pullback
+**Scalping**: Short-term trades triggered by volume surges and 20MA > 50MA
+**Breakout**: Flags when current price breaks above 20-period high
 **Lower High + Lower Low**: Detects weakening trends when each bar has a lower high and lower low than the previous bar
 """)
 
 # --- Data Processing & Signal Generation ---
 now = datetime.datetime.now()
-start = now - datetime.timedelta(days=5)
+# Fetching data for the last 5 days with 5-minute interval might be too granular for some tickers or lead to missing data.
+# Consider increasing the `days` value if you encounter frequent "No valid data" warnings.
+start = now - datetime.timedelta(days=7) # Increased to 7 days for more data points
 end = now
 
 signals = []
 
+st.subheader("⚙️ Processing Data and Generating Signals...") # Added a general processing message
+
 for ticker in TICKERS:
-    st.subheader(f"📈 {ticker}")
     try:
+        # yfinance interval "5m" typically requires data up to 60 days back for free tier,
+        # but for real-time dashboard, a few days are usually sufficient.
         df = yf.download(ticker, start=start, end=end, interval="5m")
 
-        if df.empty or 'Close' not in df:
-            st.warning(f"⚠️ No valid data for {ticker}.")
+        if df.empty or 'Close' not in df.columns:
+            st.warning(f"⚠️ No valid data for {ticker}. Skipping...")
+            continue
+
+        # Ensure enough data for calculations
+        if len(df) < 50: # 50 is the max window size for 50MA
+            st.info(f"ℹ️ Not enough data for {ticker} to calculate all indicators. Skipping...")
             continue
 
         df['20_MA'] = df['Close'].rolling(window=20).mean()
         df['50_MA'] = df['Close'].rolling(window=50).mean()
-        df['RSI'] = 100 - (100 / (1 + df['Close'].pct_change().add(1).rolling(14).apply(
-            lambda x: (x[x > 1].mean() / x[x <= 1].mean()) if x[x <= 1].mean() != 0 else 1, raw=False)))
+
+        # Corrected RSI Calculation
+        delta = df['Close'].diff()
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
+
+        avg_gain = gain.ewm(com=13, adjust=False).mean()
+        avg_loss = loss.ewm(com=13, adjust=False).mean()
+
+        rs = avg_gain / avg_loss
+        df['RSI'] = 100 - (100 / (1 + rs))
+
         df['Avg_Volume'] = df['Volume'].rolling(window=20).mean()
-        df['20_High'] = df['High'].rolling(window=20).max()
+        # For breakout, we typically compare current price to the highest high of *previous* N periods.
+        # So, calculate 20_High based on past 20 periods, excluding current bar.
+        df['20_High'] = df['High'].rolling(window=20).max().shift(1)
+
+
+        # --- Strategy Logic ---
+        # Ensure that the last few data points are not NaN due to rolling window calculations
+        current_close = df['Close'].iloc[-1]
+        current_high = df['High'].iloc[-1]
+        current_low = df['Low'].iloc[-1]
+        current_volume = df['Volume'].iloc[-1]
+
+        ma20 = df['20_MA'].iloc[-1]
+        ma50 = df['50_MA'].iloc[-1]
+        rsi_val = df['RSI'].iloc[-1]
+        avg_vol = df['Avg_Volume'].iloc[-1]
+        high_20_period_prev = df['20_High'].iloc[-1] # This is the 20-period high up to the *previous* bar
+
+        if pd.isna(ma20) or pd.isna(ma50) or pd.isna(rsi_val) or pd.isna(avg_vol) or pd.isna(high_20_period_prev):
+             st.info(f"ℹ️ Not enough complete data for {ticker} to apply strategy. Skipping...")
+             continue
 
         if strategy == "Trend Trading":
-            if pd.notna(df['20_MA'].iloc[-1]) and pd.notna(df['50_MA'].iloc[-1]) and df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1]:
-                signal = f"📈 Trend: {ticker} 20MA > 50MA"
+            if ma20 > ma50:
+                signal = f"📈 **Trend Trading**: {ticker} - 20MA > 50MA"
                 signals.append((ticker, signal))
 
         elif strategy == "RSI Overbought":
-            if pd.notna(df['RSI'].iloc[-1]) and df['RSI'].iloc[-1] > 70:
-                signal = f"🔺 RSI Overbought: {ticker} RSI={df['RSI'].iloc[-1]:.1f}"
+            if rsi_val > 70:
+                signal = f"🔺 **RSI Overbought**: {ticker} - RSI={rsi_val:.1f}"
                 signals.append((ticker, signal))
 
         elif strategy == "Scalping":
-            if pd.notna(df['20_MA'].iloc[-1]) and pd.notna(df['50_MA'].iloc[-1]) and df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1]:
-                if df['Volume'].iloc[-1] > 1.5 * df['Avg_Volume'].iloc[-1]:
-                    signal = f"⚡ Scalping: {ticker} volume surge & 20MA > 50MA"
-                    signals.append((ticker, signal))
+            if ma20 > ma50 and current_volume > 1.5 * avg_vol:
+                signal = f"⚡ **Scalping**: {ticker} - Volume surge & 20MA > 50MA"
+                signals.append((ticker, signal))
 
         elif strategy == "Breakout":
-            required_columns = ['Close', '20_High']
-            if all(col in df.columns for col in required_columns):
-                if pd.notna(df['Close'].iloc[-1]) and pd.notna(df['20_High'].iloc[-2]):
-                    if df['Close'].iloc[-1] > df['20_High'].iloc[-2]:
-                        signal = f"🔹 Breakout: {ticker} price > 20-period high"
-                        signals.append((ticker, signal))
+            # Check if current close breaks above the 20-period high (calculated from previous bars)
+            if current_close > high_20_period_prev:
+                signal = f"🔹 **Breakout**: {ticker} - Price > 20-period high"
+                signals.append((ticker, signal))
 
         elif strategy == "Lower High + Lower Low":
-            if len(df) >= 2:
-                if (df['High'].iloc[-1] < df['High'].iloc[-2]) and (df['Low'].iloc[-1] < df['Low'].iloc[-2]):
-                    signal = f"🔻 Lower High + Lower Low: {ticker} weakening trend"
+            if len(df) >= 2: # Ensure at least two bars for comparison
+                # Access previous bar's high and low directly
+                prev_high = df['High'].iloc[-2]
+                prev_low = df['Low'].iloc[-2]
+
+                if (current_high < prev_high) and (current_low < prev_low):
+                    signal = f"🔻 **Lower High + Lower Low**: {ticker} - Weakening trend"
                     signals.append((ticker, signal))
 
     except Exception as e:
         st.error(f"❌ Error processing {ticker}: {e}")
 
-# --- Display Signals ---
+---
+
+### Display Signals
+
 if signals:
     st.markdown("### ✅ Current Trade Signals")
     for _, msg in signals:
         st.success(msg)
 else:
-    st.info("No trade signals at this time.")
+    st.info("No trade signals at this time for the selected strategy.")
