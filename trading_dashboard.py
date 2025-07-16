@@ -77,9 +77,7 @@ for ticker in TICKERS:
 
         elif strategy == "Lower High + Lower Low":
             if len(df) >= 2:
-                prev = df.iloc[-2]
-                curr = df.iloc[-1]
-                if curr['High'] < prev['High'] and curr['Low'] < prev['Low']:
+                if (df['High'].iloc[-1] < df['High'].iloc[-2]) and (df['Low'].iloc[-1] < df['Low'].iloc[-2]):
                     signal = f"🔻 Lower High + Lower Low: {ticker} weakening trend"
                     signals.append((ticker, signal))
 
