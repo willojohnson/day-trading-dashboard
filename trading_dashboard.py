@@ -35,7 +35,7 @@ end = now
 signals = []
 
 for ticker in TICKERS:
-    st.subheader(f"📊 {ticker}")
+    st.subheader(f"📈 {ticker}")
     try:
         df = yf.download(ticker, start=start, end=end, interval="5m")
 
@@ -60,20 +60,19 @@ for ticker in TICKERS:
                 signal = f"🔺 RSI Overbought: {ticker} RSI={df['RSI'].iloc[-1]:.1f}"
                 signals.append((ticker, signal))
 
-def process_strategies(df, ticker, signals):
-    if strategy == "Scalping":
-        # ... (your scalping code)
-        if pd.notna(df['20_MA'].iloc[-1]) and pd.notna(df['50_MA'].iloc[-1]) and pd.notna(df['Avg_Volume'].iloc[-1]):
-            if (df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1]) & (df['Volume'].iloc[-1] > df['Avg_Volume'].iloc[-1] * 1.5):
-                signal = f"⚡ Scalping: {ticker} volume spike + 20MA > 50MA"
-                signals.append((ticker, signal))
-    elif strategy == "Breakout":
-        required_columns = ['Close', '20_High']
-        if not all(col in df.columns for col in required_columns):
-            print(f"Error: Missing required columns for Breakout strategy: {', '.join([col for col in required_columns if col not in df.columns])}")
-            return # This 'return' is now inside the function, exiting the function itself.
-        # ... (rest of your breakout code)
-    # ... other strategy checks
+        elif strategy == "Scalping":
+            if pd.notna(df['20_MA'].iloc[-1]) and pd.notna(df['50_MA'].iloc[-1]) and df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1]:
+                if df['Volume'].iloc[-1] > 1.5 * df['Avg_Volume'].iloc[-1]:
+                    signal = f"⚡ Scalping: {ticker} volume surge & 20MA > 50MA"
+                    signals.append((ticker, signal))
+
+        elif strategy == "Breakout":
+            required_columns = ['Close', '20_High']
+            if all(col in df.columns for col in required_columns):
+                if pd.notna(df['Close'].iloc[-1]) and pd.notna(df['20_High'].iloc[-2]):
+                    if df['Close'].iloc[-1] > df['20_High'].iloc[-2]:
+                        signal = f"🔹 Breakout: {ticker} price > 20-period high"
+                        signals.append((ticker, signal))
 
     except Exception as e:
         st.error(f"❌ Error processing {ticker}: {e}")
