@@ -66,31 +66,6 @@ for ticker in TICKERS:
                     signal = f"⚡ Scalping: {ticker} volume surge & 20MA > 50MA"
                     signals.append((ticker, signal))
 
-        elif strategy == "Breakout":
-            required_columns = ['Close', '20_High']
-            
-            # Check if all required columns exist
-            if not all(col in df.columns for col in required_columns):
-                # Handle the error, e.g., log, print, or skip this ticker/iteration
-                print(f"Error: Missing required columns for Breakout strategy for {ticker}: {', '.join([col for col in required_columns if col not in df.columns])}")
-                # You can choose to 'return' if this is within a function and you want to exit it
-                # Or 'continue' if this is within a loop and you want to skip to the next iteration
-                return
-
-            # Ensure data types are numeric using pd.to_numeric with errors='coerce'
-            # This handles cases where data might not be perfectly clean (e.g., strings)
-            df['Close'] = pd.to_numeric(df['Close'], errors='coerce')
-            df['20_High'] = pd.to_numeric(df['20_High'], errors='coerce')
-
-    
-            # Check for NaN values specifically at the positions needed for the strategy
-            # pd.notna() correctly identifies valid numbers after 'coerce' handles non-numeric entries.
-            if pd.notna(df['Close'].iloc[-1]) and pd.notna(df['20_High'].iloc[-2]):
-                # Core Breakout Logic: current close > previous 20-period high
-                if df['Close'].iloc[-1] > df['20_High'].iloc[-2]:
-                    signal = f"🔹 Breakout: {ticker} price > 20-period high"
-                    signals.append((ticker, signal))
-
     except Exception as e:
         st.error(f"❌ Error processing {ticker}: {e}")
 
