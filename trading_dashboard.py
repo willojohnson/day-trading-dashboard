@@ -16,7 +16,7 @@ st.sidebar.header("Dashboard Settings")
 refresh_rate = st.sidebar.slider("Refresh every N seconds", min_value=30, max_value=300, value=60, step=10)
 st_autorefresh(interval=refresh_rate * 1000, key="autorefresh")
 
-strategy = st.sidebar.selectbox("Select Strategy", ["Trend Trading", "RSI Overbought", "Scalping", "Breakout"])
+strategy = st.sidebar.selectbox("Select Strategy", ["Trend Trading", "RSI Overbought", "Scalping", "Breakout", "Lower High + Lower Low"])
 
 # --- Strategy Definitions ---
 st.sidebar.markdown("### 📘 Strategy Definitions")
@@ -24,7 +24,8 @@ st.sidebar.markdown("""
 **Trend Trading**: Shows uptrend signals when 20MA > 50MA  
 **RSI Overbought**: Flags stocks with RSI > 70 for possible pullback  
 **Scalping**: Short-term trades triggered by volume surges and 20MA > 50MA  
-**Breakout**: Flags when current price breaks above 20-period high
+**Breakout**: Flags when current price breaks above 20-period high  
+**Lower High + Lower Low**: Detects weakening trends when each bar has a lower high and lower low than the previous bar
 """)
 
 # --- Data Processing & Signal Generation ---
@@ -64,6 +65,22 @@ for ticker in TICKERS:
             if pd.notna(df['20_MA'].iloc[-1]) and pd.notna(df['50_MA'].iloc[-1]) and df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1]:
                 if df['Volume'].iloc[-1] > 1.5 * df['Avg_Volume'].iloc[-1]:
                     signal = f"⚡ Scalping: {ticker} volume surge & 20MA > 50MA"
+                    signals.append((ticker, signal))
+
+        elif strategy == "Breakout":
+            required_columns = ['Close', '20_High']
+            if all(col in df.columns for col in required_columns):
+                if pd.notna(df['Close'].iloc[-1]) and pd.notna(df['20_High'].iloc[-2]):
+                    if df['Close'].iloc[-1] > df['20_High'].iloc[-2]:
+                        signal = f"🔹 Breakout: {ticker} price > 20-period high"
+                        signals.append((ticker, signal))
+
+        elif strategy == "Lower High + Lower Low":
+            if len(df) >= 2:
+                prev = df.iloc[-2]
+                curr = df.iloc[-1]
+                if curr['High'] < prev['High'] and curr['Low'] < prev['Low']:
+                    signal = f"🔻 Lower High + Lower Low: {ticker} weakening trend"
                     signals.append((ticker, signal))
 
     except Exception as e:
