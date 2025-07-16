@@ -16,13 +16,14 @@ st.sidebar.header("Dashboard Settings")
 refresh_rate = st.sidebar.slider("Refresh every N seconds", min_value=30, max_value=300, value=60, step=10)
 st_autorefresh(interval=refresh_rate * 1000, key="autorefresh")
 
-strategy = st.sidebar.selectbox("Select Strategy", ["Trend Trading", "RSI Overbought"])
+strategy = st.sidebar.selectbox("Select Strategy", ["Trend Trading", "RSI Overbought", "RSI Oversold"])
 
 # --- Strategy Definitions ---
 st.sidebar.markdown("### 📘 Strategy Definitions")
 st.sidebar.markdown("""
 **Trend Trading**: Shows uptrend signals when 20MA > 50MA  
 **RSI Overbought**: Flags stocks with RSI > 70 for possible pullback  
+**RSI Oversold**: Flags stocks with RSI < 30 for potential bounce
 """)
 
 # --- Data Processing & Signal Generation ---
@@ -54,6 +55,11 @@ for ticker in TICKERS:
         elif strategy == "RSI Overbought":
             if pd.notna(df['RSI'].iloc[-1]) and df['RSI'].iloc[-1] > 70:
                 signal = f"🔺 RSI Overbought: {ticker} RSI={df['RSI'].iloc[-1]:.1f}"
+                signals.append((ticker, signal))
+
+        elif strategy == "RSI Oversold":
+            if pd.notna(df['RSI'].iloc[-1]) and df['RSI'].iloc[-1] < 30:
+                signal = f"🔻 RSI Oversold: {ticker} RSI={df['RSI'].iloc[-1]:.1f}"
                 signals.append((ticker, signal))
 
     except Exception as e:
