@@ -61,9 +61,31 @@ for ticker in TICKERS:
                 signals.append((ticker, signal))
 
         elif strategy == "Scalping":
-            if pd.notna(df['20_MA'].iloc[-1]) and pd.notna(df['50_MA'].iloc[-1]) and df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1]:
-                if df['Volume'].iloc[-1] > 1.5 * df['Avg_Volume'].iloc[-1]:
-                    signal = f"⚡ Scalping: {ticker} volume surge & 20MA > 50MA"
+            # Ensure required columns exist
+            required_columns = ['20_MA', '50_MA', 'Avg_Volume', 'Volume']
+            if not all(col in df.columns for col in required_columns):
+                print(f"Error: Missing required columns for Scalping strategy: {', '.join([col for col in required_columns if col not in df.columns])}")
+                return # Or continue if inside a loop
+
+            # Ensure data types are numeric and handle potential NaNs
+            try:
+                df['20_MA'] = pd.to_numeric(df['20_MA'], errors='coerce')
+                df['50_MA'] = pd.to_numeric(df['50_MA'], errors='coerce')
+                df['Avg_Volume'] = pd.to_numeric(df['Avg_Volume'], errors='coerce')
+                df['Volume'] = pd.to_numeric(df['Volume'], errors='coerce')
+            except Exception as e:
+                print(f"Error converting columns to numeric for Scalping strategy: {e}")
+                return # Or continue
+
+            # Correct the logical AND operator using '&'
+            if pd.notna(df['20_MA'].iloc[-1]) and \
+               pd.notna(df['50_MA'].iloc[-1]) and \
+               pd.notna(df['Avg_Volume'].iloc[-1]):
+
+                # Use '&' for combining the boolean conditions
+                if (df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1]) & \
+                   (df['Volume'].iloc[-1] > df['Avg_Volume'].iloc[-1] * 1.5):
+                    signal = f"⚡ Scalping: {ticker} volume spike + 20MA > 50MA"
                     signals.append((ticker, signal))
 
     except Exception as e:
