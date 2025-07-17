@@ -19,6 +19,7 @@ st_autorefresh(interval=refresh_rate * 1000, key="autorefresh")
 strategy = st.sidebar.selectbox("Select Strategy", [
 selected_bullish = st.sidebar.multiselect("📈 Bullish Strategies", bullish_strategies)
 selected_bearish = st.sidebar.multiselect("📉 Bearish Strategies", bearish_strategies)
+[
 
 # --- Strategy Definitions ---
 st.sidebar.markdown("### 📘 Strategy Definitions")
