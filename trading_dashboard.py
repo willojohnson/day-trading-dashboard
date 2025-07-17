@@ -5,7 +5,7 @@ import datetime
 from streamlit_autorefresh import st_autorefresh
 
 # --- Tickers to Monitor ---
-TICKERS = ["NVDA", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP", "TSM", "DDOG", "BTSG"]
+TICKERS = ["NVDA", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP", "TSM", "DDOG"]
 
 # --- Page Setup ---
 st.set_page_config(layout="wide")
@@ -16,7 +16,15 @@ st.sidebar.header("Dashboard Settings")
 refresh_rate = st.sidebar.slider("Refresh every N seconds", min_value=30, max_value=300, value=60, step=10)
 st_autorefresh(interval=refresh_rate * 1000, key="autorefresh")
 
-strategy = st.sidebar.selectbox("Select Strategy", ["Trend Trading", "RSI Overbought", "RSI Oversold", "MACD Bullish Crossover", "MACD Bearish Crossover"])
+strategy = st.sidebar.selectbox("Select Strategy", [
+    "Trend Trading", 
+    "RSI Overbought", 
+    "RSI Oversold", 
+    "MACD Bullish Crossover", 
+    "MACD Bearish Crossover", 
+    "Bollinger Breakout", 
+    "Bollinger Rejection"
+])
 
 # --- Strategy Definitions ---
 st.sidebar.markdown("### 📘 Strategy Definitions")
@@ -25,7 +33,9 @@ st.sidebar.markdown("""
 **RSI Overbought**: Flags stocks with RSI > 70 for possible pullback  
 **RSI Oversold**: Flags stocks with RSI < 30 for potential bounce  
 **MACD Bullish Crossover**: Fast MACD line crosses above Signal line using (3, 10, 16)  
-**MACD Bearish Crossover**: Fast MACD line crosses below Signal line using (3, 10, 16)
+**MACD Bearish Crossover**: Fast MACD line crosses below Signal line using (3, 10, 16)  
+**Bollinger Breakout**: Price closes above upper Bollinger Band, signaling potential breakout  
+**Bollinger Rejection**: Price touches upper Bollinger Band and closes below it, signaling reversal
 """)
 
 # --- Data Processing & Signal Generation ---
@@ -55,6 +65,12 @@ for ticker in TICKERS:
         df['MACD'] = exp1 - exp2
         df['MACD_Signal'] = df['MACD'].ewm(span=16, adjust=False).mean()
 
+        # Bollinger Bands
+        df['BB_Middle'] = df['Close'].rolling(window=20).mean()
+        df['BB_Std'] = df['Close'].rolling(window=20).std()
+        df['BB_Upper'] = df['BB_Middle'] + (2 * df['BB_Std'])
+        df['BB_Lower'] = df['BB_Middle'] - (2 * df['BB_Std'])
+
         if strategy == "Trend Trading":
             if pd.notna(df['20_MA'].iloc[-1]) and pd.notna(df['50_MA'].iloc[-1]) and df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1]:
                 signal = f"📈 Trend: {ticker} 20MA > 50MA"
@@ -80,6 +96,18 @@ for ticker in TICKERS:
             if pd.notna(df['MACD'].iloc[-2]) and pd.notna(df['MACD_Signal'].iloc[-2]) and pd.notna(df['MACD'].iloc[-1]) and pd.notna(df['MACD_Signal'].iloc[-1]):
                 if df['MACD'].iloc[-2] > df['MACD_Signal'].iloc[-2] and df['MACD'].iloc[-1] < df['MACD_Signal'].iloc[-1]:
                     signal = f"📉 MACD Bearish Crossover: {ticker}"
+                    signals.append((ticker, signal))
+
+        elif strategy == "Bollinger Breakout":
+            if pd.notna(df['Close'].iloc[-1]) and pd.notna(df['BB_Upper'].iloc[-1]):
+                if df['Close'].iloc[-1] > df['BB_Upper'].iloc[-1]:
+                    signal = f"🚀 Bollinger Breakout: {ticker} closed above upper band"
+                    signals.append((ticker, signal))
+
+        elif strategy == "Bollinger Rejection":
+            if pd.notna(df['High'].iloc[-1]) and pd.notna(df['BB_Upper'].iloc[-1]) and pd.notna(df['Close'].iloc[-1]):
+                if df['High'].iloc[-1] > df['BB_Upper'].iloc[-1] and df['Close'].iloc[-1] < df['BB_Upper'].iloc[-1]:
+                    signal = f"⚠️ Bollinger Rejection: {ticker} touched upper band and reversed"
                     signals.append((ticker, signal))
 
     except Exception as e:
