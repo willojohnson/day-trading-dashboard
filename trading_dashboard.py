@@ -106,14 +106,6 @@ for ticker in TICKERS:
                     signals.append((ticker, signal))
 
         elif strategy == "Bollinger Breakout":
-            close = float(df['Close'].iloc[-1]) if pd.notna(df['Close'].iloc[-1]) else None
-            upper = float(df['BB_Upper'].iloc[-1]) if pd.notna(df['BB_Upper'].iloc[-1]) else None
-
-            if close is not None and upper is not None and close > upper:
-                signal = f"🚀 Breakout: {ticker} closed above upper BB"
-                signals.append((ticker, signal))
-
-        elif strategy == "Bollinger Breakout":
             if not df.empty and 'Close' in df.columns and 'BB_Upper' in df.columns:
                 last_row = df.tail(1)
 
