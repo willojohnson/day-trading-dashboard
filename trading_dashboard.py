@@ -63,6 +63,7 @@ for ticker in TICKERS:
             st.warning(f"⚠️ No valid data for {ticker}.")
             continue
 
+        # --- Indicators ---
         df['20_MA'] = df['Close'].rolling(window=20).mean()
         df['50_MA'] = df['Close'].rolling(window=50).mean()
         delta = df['Close'].diff()
@@ -72,31 +73,29 @@ for ticker in TICKERS:
         avg_loss = loss.rolling(window=14).mean()
         rs = avg_gain / avg_loss
         df['RSI'] = 100 - (100 / (1 + rs))
-
         exp1 = df['Close'].ewm(span=3, adjust=False).mean()
         exp2 = df['Close'].ewm(span=10, adjust=False).mean()
         df['MACD'] = exp1 - exp2
         df['MACD_Signal'] = df['MACD'].ewm(span=16, adjust=False).mean()
-
         df['BB_Middle'] = df['Close'].rolling(window=20).mean()
         df['BB_Std'] = df['Close'].rolling(window=20).std()
         df['BB_Upper'] = df['BB_Middle'] + (2 * df['BB_Std'])
         df['BB_Lower'] = df['BB_Middle'] - (2 * df['BB_Std'])
 
-        # --- Tracker row for heatmap ---
+        # --- Signal Tracking ---
         heatmap_row = {"Ticker": ticker}
         for strat in bullish_strategies + bearish_strategies:
             heatmap_row[strat] = 0
 
-        # --- Bullish Checks ---
+        # --- Bullish Signals ---
         if "Trend Trading" in selected_bullish:
             if pd.notna(df['20_MA'].iloc[-1]) and pd.notna(df['50_MA'].iloc[-1]) and df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1]:
-                signals.append((ticker, f"📈 Bullish - Trend Trading: {ticker} 20MA > 50MA"))
+                signals.append((ticker, f"📈 Bullish - Trend Trading"))
                 heatmap_row["Trend Trading"] = 1
 
         if "RSI Oversold" in selected_bullish:
             if pd.notna(df['RSI'].iloc[-1]) and df['RSI'].iloc[-1] < 30:
-                signals.append((ticker, f"📈 Bullish - RSI Oversold: {ticker} RSI={df['RSI'].iloc[-1]:.1f}"))
+                signals.append((ticker, f"📈 Bullish - RSI Oversold (RSI={df['RSI'].iloc[-1]:.1f})"))
                 heatmap_row["RSI Oversold"] = 1
 
         if "MACD Bullish Crossover" in selected_bullish:
@@ -104,7 +103,7 @@ for ticker in TICKERS:
                 df['MACD'].iloc[-2], df['MACD_Signal'].iloc[-2],
                 df['MACD'].iloc[-1], df['MACD_Signal'].iloc[-1]]):
                 if df['MACD'].iloc[-2] < df['MACD_Signal'].iloc[-2] and df['MACD'].iloc[-1] > df['MACD_Signal'].iloc[-1]:
-                    signals.append((ticker, f"📈 Bullish - MACD Bullish Crossover: {ticker}"))
+                    signals.append((ticker, f"📈 Bullish - MACD Bullish Crossover"))
                     heatmap_row["MACD Bullish Crossover"] = 1
 
         if "Bollinger Breakout" in selected_bullish:
@@ -112,13 +111,13 @@ for ticker in TICKERS:
             close = last['Close'].values[0]
             upper = last['BB_Upper'].values[0]
             if pd.notna(close) and pd.notna(upper) and close > upper:
-                signals.append((ticker, f"📈 Bullish - Bollinger Breakout: {ticker} closed above upper BB"))
+                signals.append((ticker, f"📈 Bullish - Bollinger Breakout"))
                 heatmap_row["Bollinger Breakout"] = 1
 
-        # --- Bearish Checks ---
+        # --- Bearish Signals ---
         if "RSI Overbought" in selected_bearish:
             if pd.notna(df['RSI'].iloc[-1]) and df['RSI'].iloc[-1] > 70:
-                signals.append((ticker, f"📉 Bearish - RSI Overbought: {ticker} RSI={df['RSI'].iloc[-1]:.1f}"))
+                signals.append((ticker, f"📉 Bearish - RSI Overbought (RSI={df['RSI'].iloc[-1]:.1f})"))
                 heatmap_row["RSI Overbought"] = 1
 
         if "MACD Bearish Crossover" in selected_bearish:
@@ -126,7 +125,7 @@ for ticker in TICKERS:
                 df['MACD'].iloc[-2], df['MACD_Signal'].iloc[-2],
                 df['MACD'].iloc[-1], df['MACD_Signal'].iloc[-1]]):
                 if df['MACD'].iloc[-2] > df['MACD_Signal'].iloc[-2] and df['MACD'].iloc[-1] < df['MACD_Signal'].iloc[-1]:
-                    signals.append((ticker, f"📉 Bearish - MACD Bearish Crossover: {ticker}"))
+                    signals.append((ticker, f"📉 Bearish - MACD Bearish Crossover"))
                     heatmap_row["MACD Bearish Crossover"] = 1
 
         if "Bollinger Rejection" in selected_bearish:
@@ -135,7 +134,7 @@ for ticker in TICKERS:
             close = last['Close'].values[0]
             upper = last['BB_Upper'].values[0]
             if pd.notna(high) and pd.notna(close) and pd.notna(upper) and high >= upper and close < upper:
-                signals.append((ticker, f"📉 Bearish - Bollinger Rejection: {ticker} touched upper BB and closed below"))
+                signals.append((ticker, f"📉 Bearish - Bollinger Rejection"))
                 heatmap_row["Bollinger Rejection"] = 1
 
         heatmap_data.append(heatmap_row)
@@ -156,8 +155,10 @@ if heatmap_data:
     st.markdown("### 🧭 Strategy Signal Matrix")
 
     heatmap_df = pd.DataFrame(heatmap_data)
-    heatmap_df["Bullish Total"] = heatmap_df[[col for col in bullish_strategies]].sum(axis=1)
-    heatmap_df["Bearish Total"] = heatmap_df[[col for col in bearish_strategies]].sum(axis=1)
+    heatmap_df["Bullish Total"] = heatmap_df[[col for col in bullish_strategies if col in heatmap_df.columns]].sum(axis=1)
+    heatmap_df["Bearish Total"] = heatmap_df[[col for col in bearish_strategies if col in heatmap_df.columns]].sum(axis=1)
 
     ordered_cols = ["Ticker"] + bullish_strategies + ["Bullish Total"] + bearish_strategies + ["Bearish Total"]
-    heatmap_df =
+    heatmap_df = heatmap_df[ordered_cols]
+
+    st.dataframe(heatmap_df.style.highlight
