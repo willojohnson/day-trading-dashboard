@@ -113,14 +113,24 @@ for ticker in TICKERS:
                 signal = f"🚀 Breakout: {ticker} closed above upper BB"
                 signals.append((ticker, signal))
 
-        elif strategy == "Bollinger Rejection":
-            high = float(df['High'].iloc[-1]) if pd.notna(df['High'].iloc[-1]) else None
-            close = float(df['Close'].iloc[-1]) if pd.notna(df['Close'].iloc[-1]) else None
-            upper = float(df['BB_Upper'].iloc[-1]) if pd.notna(df['BB_Upper'].iloc[-1]) else None
+        elif strategy == "Bollinger Breakout":
+            close = df['Close'].iloc[-1]
+            upper = df['BB_Upper'].iloc[-1]
 
-            if None not in (high, close, upper) and high >= upper and close < upper:
-                signal = f"🔄 Rejection: {ticker} touched upper BB and closed below"
-                signals.append((ticker, signal))
+            if pd.notna(close) and pd.notna(upper):
+                if float(close) > float(upper):
+                    signal = f"🚀 Breakout: {ticker} closed above upper BB"
+                    signals.append((ticker, signal))
+
+        elif strategy == "Bollinger Rejection":
+            high = df['High'].iloc[-1]
+            close = df['Close'].iloc[-1]
+            upper = df['BB_Upper'].iloc[-1]
+
+            if pd.notna(high) and pd.notna(close) and pd.notna(upper):
+                if float(high) >= float(upper) and float(close) < float(upper):
+                    signal = f"🔄 Rejection: {ticker} touched upper BB and closed below"
+                    signals.append((ticker, signal))
 
     except Exception as e:
         st.error(f"❌ Error processing {ticker}: {e}")
