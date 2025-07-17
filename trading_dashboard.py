@@ -108,9 +108,9 @@ for ticker in TICKERS:
         # Ensure DataFrame is not empty
             if not df.empty:
         # All operands are scalars
-                if df['High'].iloc[-1] > df['BB_Upper'].iloc[-1] and df['Close'].iloc[-1] < df['BB_Upper'].iloc[-1]:
-                signal = f"⚠️ Bollinger Rejection: {ticker} touched upper band and reversed"
-                signals.append((ticker, signal))
+            if df['High'].iloc[-1] > df['BB_Upper'].iloc[-1] and df['Close'].iloc[-1] < df['BB_Upper'].iloc[-1]:
+            signal = f"⚠️ Bollinger Rejection: {ticker} touched upper band and reversed"
+            signals.append((ticker, signal))
 
     except Exception as e:
         st.error(f"❌ Error processing {ticker}: {e}")
