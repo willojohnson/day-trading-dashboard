@@ -1,8 +1,4 @@
 import streamlit as st
-
-# The corrected code as a multi-line string
-corrected_code = '''
-import streamlit as st
 import yfinance as yf
 import pandas as pd
 import datetime
