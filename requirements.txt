@@ -2,5 +2,6 @@ streamlit
 yfinance
 pandas
 numpy
+plotly>=5.0
 streamlit-autorefresh
 
