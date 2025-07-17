@@ -114,21 +114,25 @@ for ticker in TICKERS:
                 signals.append((ticker, signal))
 
         elif strategy == "Bollinger Breakout":
-            close = df['Close'].iloc[-1]
-            upper = df['BB_Upper'].iloc[-1]
+            if not df.empty and 'Close' in df.columns and 'BB_Upper' in df.columns:
+                last_row = df.tail(1)
 
-            if pd.notna(close) and pd.notna(upper):
-                if float(close) > float(upper):
+                close = last_row['Close'].values[0]
+                upper = last_row['BB_Upper'].values[0]
+
+                if pd.notna(close) and pd.notna(upper) and close > upper:
                     signal = f"🚀 Breakout: {ticker} closed above upper BB"
                     signals.append((ticker, signal))
 
         elif strategy == "Bollinger Rejection":
-            high = df['High'].iloc[-1]
-            close = df['Close'].iloc[-1]
-            upper = df['BB_Upper'].iloc[-1]
+            if not df.empty and 'High' in df.columns and 'Close' in df.columns and 'BB_Upper' in df.columns:
+                last_row = df.tail(1)
 
-            if pd.notna(high) and pd.notna(close) and pd.notna(upper):
-                if float(high) >= float(upper) and float(close) < float(upper):
+                high = last_row['High'].values[0]
+                close = last_row['Close'].values[0]
+                upper = last_row['BB_Upper'].values[0]
+
+                if pd.notna(high) and pd.notna(close) and pd.notna(upper) and high >= upper and close < upper:
                     signal = f"🔄 Rejection: {ticker} touched upper BB and closed below"
                     signals.append((ticker, signal))
 
