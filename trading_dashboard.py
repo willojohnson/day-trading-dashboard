@@ -98,20 +98,6 @@ for ticker in TICKERS:
                     signal = f"📉 MACD Bearish Crossover: {ticker}"
                     signals.append((ticker, signal))
 
-        elif strategy == "Bollinger Breakout":
-            if pd.notna(df['Close'].iloc[-1]) and pd.notna(df['BB_Upper'].iloc[-1]):
-                if df['Close'].iloc[-1] > df['BB_Upper'].iloc[-1]:
-                    signal = f"🚀 Bollinger Breakout: {ticker} closed above upper band"
-                    signals.append((ticker, signal))
-
-        elif strategy == "Bollinger Rejection":
-        # Ensure DataFrame is not empty
-            if not df.empty:
-        # All operands are scalars
-                if df['High'].iloc[-1] > df['BB_Upper'].iloc[-1] and df['Close'].iloc[-1] < df['BB_Upper'].iloc[-1]:
-                    signal = f"⚠️ Bollinger Rejection: {ticker} touched upper band and reversed"
-                    signals.append((ticker, signal))
-
     except Exception as e:
         st.error(f"❌ Error processing {ticker}: {e}")
 
