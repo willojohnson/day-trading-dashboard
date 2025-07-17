@@ -17,19 +17,8 @@ refresh_rate = st.sidebar.slider("Refresh every N seconds", min_value=30, max_va
 st_autorefresh(interval=refresh_rate * 1000, key="autorefresh")
 
 strategy = st.sidebar.selectbox("Select Strategy", [
-bullish_strategies = [
-    "Trend Trading", 
-    "MACD Bullish Crossover", 
-    "RSI Oversold", 
-    "Bollinger Breakout"
-]
-
-bearish_strategies = [
-    "MACD Bearish Crossover", 
-    "RSI Overbought", 
-    "Bollinger Rejection"
-]
-
+selected_bullish = st.sidebar.multiselect("📈 Bullish Strategies", bullish_strategies)
+selected_bearish = st.sidebar.multiselect("📉 Bearish Strategies", bearish_strategies)
 
 # --- Strategy Definitions ---
 st.sidebar.markdown("### 📘 Strategy Definitions")
