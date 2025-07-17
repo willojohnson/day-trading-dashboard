@@ -161,4 +161,5 @@ if heatmap_data:
     ordered_cols = ["Ticker"] + bullish_strategies + ["Bullish Total"] + bearish_strategies + ["Bearish Total"]
     heatmap_df = heatmap_df[ordered_cols]
 
-    st.dataframe(heatmap_df.style.highlight
+st.dataframe(heatmap_df.style.highlight_max(axis=0, subset=["Bullish Total", "Bearish Total"], color="lightgreen"))
+
