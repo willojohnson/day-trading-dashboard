@@ -87,55 +87,22 @@ for ticker in TICKERS:
         df['BB_Upper'] = df['BB_Middle'] + (2 * df['BB_Std'])
         df['BB_Lower'] = df['BB_Middle'] - (2 * df['BB_Std'])
 
-        if strategy == "Trend Trading":
-            if pd.notna(df['20_MA'].iloc[-1]) and pd.notna(df['50_MA'].iloc[-1]) and df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1]:
-                signal = f"📈 Trend: {ticker} 20MA > 50MA"
-                signals.append((ticker, signal))
+bullish_strategies = [
+    "Trend Trading", 
+    "MACD Bullish Crossover", 
+    "RSI Oversold", 
+    "Bollinger Breakout"
+]
 
-        elif strategy == "RSI Overbought":
-            if pd.notna(df['RSI'].iloc[-1]) and df['RSI'].iloc[-1] > 70:
-                signal = f"🔺 RSI Overbought: {ticker} RSI={df['RSI'].iloc[-1]:.1f}"
-                signals.append((ticker, signal))
+bearish_strategies = [
+    "MACD Bearish Crossover", 
+    "RSI Overbought", 
+    "Bollinger Rejection"
+]
 
-        elif strategy == "RSI Oversold":
-            if pd.notna(df['RSI'].iloc[-1]) and df['RSI'].iloc[-1] < 30:
-                signal = f"🔻 RSI Oversold: {ticker} RSI={df['RSI'].iloc[-1]:.1f}"
-                signals.append((ticker, signal))
+selected_bullish = st.sidebar.multiselect("📈 Bullish Strategies", bullish_strategies)
+selected_bearish = st.sidebar.multiselect("📉 Bearish Strategies", bearish_strategies)
 
-        elif strategy == "MACD Bullish Crossover":
-            if pd.notna(df['MACD'].iloc[-2]) and pd.notna(df['MACD_Signal'].iloc[-2]) and pd.notna(df['MACD'].iloc[-1]) and pd.notna(df['MACD_Signal'].iloc[-1]):
-                if df['MACD'].iloc[-2] < df['MACD_Signal'].iloc[-2] and df['MACD'].iloc[-1] > df['MACD_Signal'].iloc[-1]:
-                    signal = f"📊 MACD Bullish Crossover: {ticker}"
-                    signals.append((ticker, signal))
-
-        elif strategy == "MACD Bearish Crossover":
-            if pd.notna(df['MACD'].iloc[-2]) and pd.notna(df['MACD_Signal'].iloc[-2]) and pd.notna(df['MACD'].iloc[-1]) and pd.notna(df['MACD_Signal'].iloc[-1]):
-                if df['MACD'].iloc[-2] > df['MACD_Signal'].iloc[-2] and df['MACD'].iloc[-1] < df['MACD_Signal'].iloc[-1]:
-                    signal = f"📉 MACD Bearish Crossover: {ticker}"
-                    signals.append((ticker, signal))
-
-        elif strategy == "Bollinger Breakout":
-            if not df.empty and 'Close' in df.columns and 'BB_Upper' in df.columns:
-                last_row = df.tail(1)
-
-                close = last_row['Close'].values[0]
-                upper = last_row['BB_Upper'].values[0]
-
-                if pd.notna(close) and pd.notna(upper) and close > upper:
-                    signal = f"🚀 Breakout: {ticker} closed above upper BB"
-                    signals.append((ticker, signal))
-
-        elif strategy == "Bollinger Rejection":
-            if not df.empty and 'High' in df.columns and 'Close' in df.columns and 'BB_Upper' in df.columns:
-                last_row = df.tail(1)
-
-                high = last_row['High'].values[0]
-                close = last_row['Close'].values[0]
-                upper = last_row['BB_Upper'].values[0]
-
-                if pd.notna(high) and pd.notna(close) and pd.notna(upper) and high >= upper and close < upper:
-                    signal = f"🔄 Rejection: {ticker} touched upper BB and closed below"
-                    signals.append((ticker, signal))
 
     except Exception as e:
         st.error(f"❌ Error processing {ticker}: {e}")
