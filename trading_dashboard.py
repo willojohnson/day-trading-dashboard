@@ -56,8 +56,15 @@ for ticker in TICKERS:
 
         df['20_MA'] = df['Close'].rolling(window=20).mean()
         df['50_MA'] = df['Close'].rolling(window=50).mean()
-        df['RSI'] = 100 - (100 / (1 + df['Close'].pct_change().add(1).rolling(14).apply(
-            lambda x: (x[x > 1].mean() / x[x <= 1].mean()) if x[x <= 1].mean() != 0 else 1, raw=False)))
+        delta = df['Close'].diff()
+        gain = delta.clip(lower=0)
+        loss = -delta.clip(upper=0)
+
+        avg_gain = gain.rolling(window=14).mean()
+        avg_loss = loss.rolling(window=14).mean()
+
+        rs = avg_gain / avg_loss
+        df['RSI'] = 100 - (100 / (1 + rs))
 
         # MACD with fast settings
         exp1 = df['Close'].ewm(span=3, adjust=False).mean()
