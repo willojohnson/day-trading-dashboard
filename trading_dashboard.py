@@ -16,7 +16,7 @@ st.sidebar.header("Dashboard Settings")
 refresh_rate = st.sidebar.slider("Refresh every N seconds", min_value=30, max_value=300, value=60, step=10)
 st_autorefresh(interval=refresh_rate * 1000, key="autorefresh")
 
-# Define strategy categories first
+# --- Strategy Selectors ---
 bullish_strategies = [
     "Trend Trading", 
     "MACD Bullish Crossover", 
@@ -30,10 +30,8 @@ bearish_strategies = [
     "Bollinger Rejection"
 ]
 
-# Then use two multiselects independently
 selected_bullish = st.sidebar.multiselect("📈 Bullish Strategies", bullish_strategies)
 selected_bearish = st.sidebar.multiselect("📉 Bearish Strategies", bearish_strategies)
-
 
 # --- Strategy Definitions ---
 st.sidebar.markdown("### 📘 Strategy Definitions")
@@ -63,46 +61,73 @@ for ticker in TICKERS:
             st.warning(f"⚠️ No valid data for {ticker}.")
             continue
 
+        # --- Indicators ---
         df['20_MA'] = df['Close'].rolling(window=20).mean()
         df['50_MA'] = df['Close'].rolling(window=50).mean()
+
         delta = df['Close'].diff()
         gain = delta.clip(lower=0)
         loss = -delta.clip(upper=0)
-
         avg_gain = gain.rolling(window=14).mean()
         avg_loss = loss.rolling(window=14).mean()
-
         rs = avg_gain / avg_loss
         df['RSI'] = 100 - (100 / (1 + rs))
 
-        # MACD with fast settings
         exp1 = df['Close'].ewm(span=3, adjust=False).mean()
         exp2 = df['Close'].ewm(span=10, adjust=False).mean()
         df['MACD'] = exp1 - exp2
         df['MACD_Signal'] = df['MACD'].ewm(span=16, adjust=False).mean()
 
-        # Bollinger Bands
         df['BB_Middle'] = df['Close'].rolling(window=20).mean()
         df['BB_Std'] = df['Close'].rolling(window=20).std()
         df['BB_Upper'] = df['BB_Middle'] + (2 * df['BB_Std'])
         df['BB_Lower'] = df['BB_Middle'] - (2 * df['BB_Std'])
 
-bullish_strategies = [
-    "Trend Trading", 
-    "MACD Bullish Crossover", 
-    "RSI Oversold", 
-    "Bollinger Breakout"
-]
+        # --- Bullish Strategy Logic ---
+        if "Trend Trading" in selected_bullish:
+            if pd.notna(df['20_MA'].iloc[-1]) and pd.notna(df['50_MA'].iloc[-1]) and df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1]:
+                signal = f"📈 Bullish - Trend Trading: {ticker} 20MA > 50MA"
+                signals.append((ticker, signal))
 
-bearish_strategies = [
-    "MACD Bearish Crossover", 
-    "RSI Overbought", 
-    "Bollinger Rejection"
-]
+        if "RSI Oversold" in selected_bullish:
+            if pd.notna(df['RSI'].iloc[-1]) and df['RSI'].iloc[-1] < 30:
+                signal = f"📈 Bullish - RSI Oversold: {ticker} RSI={df['RSI'].iloc[-1]:.1f}"
+                signals.append((ticker, signal))
 
-selected_bullish = st.sidebar.multiselect("📈 Bullish Strategies", bullish_strategies)
-selected_bearish = st.sidebar.multiselect("📉 Bearish Strategies", bearish_strategies)
+        if "MACD Bullish Crossover" in selected_bullish:
+            if pd.notna(df['MACD'].iloc[-2]) and pd.notna(df['MACD_Signal'].iloc[-2]) and pd.notna(df['MACD'].iloc[-1]) and pd.notna(df['MACD_Signal'].iloc[-1]):
+                if df['MACD'].iloc[-2] < df['MACD_Signal'].iloc[-2] and df['MACD'].iloc[-1] > df['MACD_Signal'].iloc[-1]:
+                    signal = f"📈 Bullish - MACD Bullish Crossover: {ticker}"
+                    signals.append((ticker, signal))
 
+        if "Bollinger Breakout" in selected_bullish:
+            last_row = df.tail(1)
+            close = last_row['Close'].values[0]
+            upper = last_row['BB_Upper'].values[0]
+            if pd.notna(close) and pd.notna(upper) and close > upper:
+                signal = f"📈 Bullish - Bollinger Breakout: {ticker} closed above upper BB"
+                signals.append((ticker, signal))
+
+        # --- Bearish Strategy Logic ---
+        if "RSI Overbought" in selected_bearish:
+            if pd.notna(df['RSI'].iloc[-1]) and df['RSI'].iloc[-1] > 70:
+                signal = f"📉 Bearish - RSI Overbought: {ticker} RSI={df['RSI'].iloc[-1]:.1f}"
+                signals.append((ticker, signal))
+
+        if "MACD Bearish Crossover" in selected_bearish:
+            if pd.notna(df['MACD'].iloc[-2]) and pd.notna(df['MACD_Signal'].iloc[-2]) and pd.notna(df['MACD'].iloc[-1]) and pd.notna(df['MACD_Signal'].iloc[-1]):
+                if df['MACD'].iloc[-2] > df['MACD_Signal'].iloc[-2] and df['MACD'].iloc[-1] < df['MACD_Signal'].iloc[-1]:
+                    signal = f"📉 Bearish - MACD Bearish Crossover: {ticker}"
+                    signals.append((ticker, signal))
+
+        if "Bollinger Rejection" in selected_bearish:
+            last_row = df.tail(1)
+            high = last_row['High'].values[0]
+            close = last_row['Close'].values[0]
+            upper = last_row['BB_Upper'].values[0]
+            if pd.notna(high) and pd.notna(close) and pd.notna(upper) and high >= upper and close < upper:
+                signal = f"📉 Bearish - Bollinger Rejection: {ticker} touched upper BB and closed below"
+                signals.append((ticker, signal))
 
     except Exception as e:
         st.error(f"❌ Error processing {ticker}: {e}")
