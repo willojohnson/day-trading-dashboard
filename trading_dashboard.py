@@ -3,6 +3,7 @@ import yfinance as yf
 import pandas as pd
 import datetime
 from streamlit_autorefresh import st_autorefresh
+import plotly.express as px
 
 # --- Tickers to Monitor ---
 TICKERS = ["NVDA", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP", "TSM", "DDOG"]
@@ -51,6 +52,7 @@ start = now - datetime.timedelta(days=5)
 end = now
 
 signals = []
+heatmap_data = []
 
 for ticker in TICKERS:
     st.subheader(f"📈 {ticker}")
@@ -83,22 +85,30 @@ for ticker in TICKERS:
         df['BB_Upper'] = df['BB_Middle'] + (2 * df['BB_Std'])
         df['BB_Lower'] = df['BB_Middle'] - (2 * df['BB_Std'])
 
-        # --- Bullish Strategy Logic ---
+        # --- Initialize tracker for signal heatmap ---
+        heatmap_row = {"Ticker": ticker}
+        for strat in bullish_strategies + bearish_strategies:
+            heatmap_row[strat] = 0
+
+        # --- Bullish Strategies ---
         if "Trend Trading" in selected_bullish:
             if pd.notna(df['20_MA'].iloc[-1]) and pd.notna(df['50_MA'].iloc[-1]) and df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1]:
                 signal = f"📈 Bullish - Trend Trading: {ticker} 20MA > 50MA"
                 signals.append((ticker, signal))
+                heatmap_row["Trend Trading"] = 1
 
         if "RSI Oversold" in selected_bullish:
             if pd.notna(df['RSI'].iloc[-1]) and df['RSI'].iloc[-1] < 30:
                 signal = f"📈 Bullish - RSI Oversold: {ticker} RSI={df['RSI'].iloc[-1]:.1f}"
                 signals.append((ticker, signal))
+                heatmap_row["RSI Oversold"] = 1
 
         if "MACD Bullish Crossover" in selected_bullish:
             if pd.notna(df['MACD'].iloc[-2]) and pd.notna(df['MACD_Signal'].iloc[-2]) and pd.notna(df['MACD'].iloc[-1]) and pd.notna(df['MACD_Signal'].iloc[-1]):
                 if df['MACD'].iloc[-2] < df['MACD_Signal'].iloc[-2] and df['MACD'].iloc[-1] > df['MACD_Signal'].iloc[-1]:
                     signal = f"📈 Bullish - MACD Bullish Crossover: {ticker}"
                     signals.append((ticker, signal))
+                    heatmap_row["MACD Bullish Crossover"] = 1
 
         if "Bollinger Breakout" in selected_bullish:
             last_row = df.tail(1)
@@ -107,18 +117,21 @@ for ticker in TICKERS:
             if pd.notna(close) and pd.notna(upper) and close > upper:
                 signal = f"📈 Bullish - Bollinger Breakout: {ticker} closed above upper BB"
                 signals.append((ticker, signal))
+                heatmap_row["Bollinger Breakout"] = 1
 
-        # --- Bearish Strategy Logic ---
+        # --- Bearish Strategies ---
         if "RSI Overbought" in selected_bearish:
             if pd.notna(df['RSI'].iloc[-1]) and df['RSI'].iloc[-1] > 70:
                 signal = f"📉 Bearish - RSI Overbought: {ticker} RSI={df['RSI'].iloc[-1]:.1f}"
                 signals.append((ticker, signal))
+                heatmap_row["RSI Overbought"] = 1
 
         if "MACD Bearish Crossover" in selected_bearish:
             if pd.notna(df['MACD'].iloc[-2]) and pd.notna(df['MACD_Signal'].iloc[-2]) and pd.notna(df['MACD'].iloc[-1]) and pd.notna(df['MACD_Signal'].iloc[-1]):
                 if df['MACD'].iloc[-2] > df['MACD_Signal'].iloc[-2] and df['MACD'].iloc[-1] < df['MACD_Signal'].iloc[-1]:
                     signal = f"📉 Bearish - MACD Bearish Crossover: {ticker}"
                     signals.append((ticker, signal))
+                    heatmap_row["MACD Bearish Crossover"] = 1
 
         if "Bollinger Rejection" in selected_bearish:
             last_row = df.tail(1)
@@ -128,6 +141,9 @@ for ticker in TICKERS:
             if pd.notna(high) and pd.notna(close) and pd.notna(upper) and high >= upper and close < upper:
                 signal = f"📉 Bearish - Bollinger Rejection: {ticker} touched upper BB and closed below"
                 signals.append((ticker, signal))
+                heatmap_row["Bollinger Rejection"] = 1
+
+        heatmap_data.append(heatmap_row)
 
     except Exception as e:
         st.error(f"❌ Error processing {ticker}: {e}")
@@ -139,3 +155,10 @@ if signals:
         st.success(msg)
 else:
     st.info("No trade signals at this time.")
+
+# --- Display Heatmap Summary ---
+if heatmap_data:
+    st.markdown("### 🔥 Signal Strength Heatmap")
+    heatmap_df = pd.DataFrame(heatmap_data)
+
+    # Optional: calculate total bullish
