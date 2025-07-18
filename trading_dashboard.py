@@ -21,8 +21,8 @@ st_autorefresh(interval=refresh_rate * 1000, key="autorefresh")
 bullish_strategies = ["Trend Trading", "MACD Bullish Crossover", "RSI Oversold", "Bollinger Breakout"]
 bearish_strategies = ["MACD Bearish Crossover", "RSI Overbought", "Bollinger Rejection"]
 
-selected_bullish = st.sidebar.multiselect("📈 Bullish Strategies", bullish_strategies)
-selected_bearish = st.sidebar.multiselect("📉 Bearish Strategies", bearish_strategies)
+selected_bullish = bullish_strategies
+selected_bearish = bearish_strategies
 
 if not selected_bullish and not selected_bearish:
     st.warning("👆 Please select at least one strategy to activate the dashboard.")
