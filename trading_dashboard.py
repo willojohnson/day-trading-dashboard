@@ -36,8 +36,8 @@ refresh_rate = st.sidebar.slider("Refresh every N seconds", min_value=30, max_va
 st_autorefresh(interval=refresh_rate * 1000, key="autorefresh")
 
 # --- Strategy Selectors ---
-bullish_strategies = ["Trend Trading", "MACD Bullish Crossover", "RSI Oversold", "Bollinger Breakout"]
-bearish_strategies = ["MACD Bearish Crossover", "RSI Overbought", "Bollinger Rejection"]
+bullish_strategies = ["Trend Trading", "MACD Bullish Crossover", "RSI Oversold"]
+bearish_strategies = ["MACD Bearish Crossover", "RSI Overbought"]
 
 selected_bullish = st.sidebar.multiselect("📈 Bullish Strategies", bullish_strategies)
 selected_bearish = st.sidebar.multiselect("📉 Bearish Strategies", bearish_strategies)
@@ -50,9 +50,6 @@ st.sidebar.markdown("""
 **RSI Oversold**: RSI < 30  
 **MACD Bullish Crossover**: MACD crosses above Signal  
 **MACD Bearish Crossover**: MACD crosses below Signal  
-**Bollinger Breakout**: Price closes above upper Bollinger Band  
-**Bollinger Rejection**: High >= upper BB and Close < upper BB
-""")
 
 # --- Signal Detection ---
 now = datetime.datetime.now()
@@ -85,10 +82,6 @@ for ticker in TICKERS:
         exp2 = df['Close'].ewm(span=10, adjust=False).mean()
         df['MACD'] = exp1 - exp2
         df['MACD_Signal'] = df['MACD'].ewm(span=16, adjust=False).mean()
-        df['BB_Middle'] = df['Close'].rolling(20).mean()
-        df['BB_Std'] = df['Close'].rolling(20).std()
-        df['BB_Upper'] = df['BB_Middle'] + (2 * df['BB_Std'])
-        df['BB_Lower'] = df['BB_Middle'] - (2 * df['BB_Std'])
 
         # Signal Matrix Row
         heatmap_row = {"Ticker": ticker, "Label": f"{ticker} — {company}"}
