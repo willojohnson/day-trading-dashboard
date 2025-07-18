@@ -47,6 +47,7 @@ for ticker in TICKERS:
         # --- Indicators ---
         df['20_MA'] = df['Close'].rolling(20).mean()
         df['50_MA'] = df['Close'].rolling(50).mean()
+
         delta = df['Close'].diff()
         gain = delta.clip(lower=0)
         loss = -delta.clip(upper=0)
@@ -54,10 +55,12 @@ for ticker in TICKERS:
         avg_loss = loss.rolling(14).mean()
         rs = avg_gain / avg_loss
         df['RSI'] = 100 - (100 / (1 + rs))
+
         exp1 = df['Close'].ewm(span=3, adjust=False).mean()
         exp2 = df['Close'].ewm(span=10, adjust=False).mean()
         df['MACD'] = exp1 - exp2
         df['MACD_Signal'] = df['MACD'].ewm(span=16, adjust=False).mean()
+
         df['BB_Middle'] = df['Close'].rolling(20).mean()
         df['BB_Std'] = df['Close'].rolling(20).std()
         df['BB_Upper'] = df['BB_Middle'] + (2 * df['BB_Std'])
@@ -102,6 +105,7 @@ for ticker in TICKERS:
 
     except Exception as e:
         st.error(f"❌ Error processing {ticker}: {e}")
+
 # --- Signal Display ---
 st.markdown("### ✅ Strategy Matches Across All Tickers")
 if signals:
@@ -134,20 +138,20 @@ if heatmap_data:
 
     def custom_color(val, strat):
         if val == 0:
-            return 0.0  # neutral gray
+            return 0.0
         elif strat in bullish_strategies:
-            return 1.0  # green
+            return 1.0
         elif strat in bearish_strategies:
-            return -1.0  # red
+            return -1.0
 
     scaled = matrix.copy()
     for col in scaled.columns:
         scaled[col] = scaled[col].apply(lambda v: custom_color(v, col))
 
     colorscale = [
-        [0.0, "lightcoral"],   # red for bearish
-        [0.5, "#eeeeee"],      # gray for neutral
-        [1.0, "lightgreen"]    # green for bullish
+        [0.0, "lightcoral"],
+        [0.5, "#eeeeee"],
+        [1.0, "lightgreen"]
     ]
 
     fig = px.imshow(
