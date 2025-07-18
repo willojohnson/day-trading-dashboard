@@ -8,6 +8,24 @@ import plotly.express as px
 # --- Tickers to Monitor ---
 TICKERS = ["NVDA", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP", "TSM", "DDOG"]
 
+# --- Ticker to Company Name Mapping ---
+TICKER_NAMES = {
+    "NVDA": "NVIDIA Corporation",
+    "MSFT": "Microsoft Corporation",
+    "GOOGL": "Alphabet Inc.",
+    "AMZN": "Amazon.com Inc.",
+    "META": "Meta Platforms Inc.",
+    "TSLA": "Tesla Inc.",
+    "SNOW": "Snowflake Inc.",
+    "AI": "C3.ai Inc.",
+    "AMD": "Advanced Micro Devices Inc.",
+    "BBAI": "BigBear.ai Holdings Inc.",
+    "SOUN": "SoundHound AI Inc.",
+    "CRSP": "CRISPR Therapeutics AG",
+    "TSM": "Taiwan Semiconductor",
+    "DDOG": "Datadog Inc."
+}
+
 # --- Page Setup ---
 st.set_page_config(layout="wide")
 st.title("📈 Real-Time Trading Dashboard")
@@ -36,7 +54,7 @@ st.sidebar.markdown("""
 **Bollinger Rejection**: High >= upper BB and Close < upper BB
 """)
 
-# --- Data Processing & Signal Detection ---
+# --- Signal Detection ---
 now = datetime.datetime.now()
 start = now - datetime.timedelta(days=5)
 end = now
@@ -45,18 +63,17 @@ signals = []
 heatmap_data = []
 
 for ticker in TICKERS:
-    st.subheader(f"📈 {ticker}")
+    company = TICKER_NAMES.get(ticker, ticker)
+    st.subheader(f"📈 {ticker} — {company}")
     try:
         df = yf.download(ticker, start=start, end=end, interval="5m")
-
         if df.empty or 'Close' not in df.columns:
             st.warning(f"⚠️ No valid data for {ticker}.")
             continue
 
-        # --- Indicators ---
+        # Indicators
         df['20_MA'] = df['Close'].rolling(20).mean()
         df['50_MA'] = df['Close'].rolling(50).mean()
-
         delta = df['Close'].diff()
         gain = delta.clip(lower=0)
         loss = -delta.clip(upper=0)
@@ -64,61 +81,52 @@ for ticker in TICKERS:
         avg_loss = loss.rolling(14).mean()
         rs = avg_gain / avg_loss
         df['RSI'] = 100 - (100 / (1 + rs))
-
         exp1 = df['Close'].ewm(span=3, adjust=False).mean()
         exp2 = df['Close'].ewm(span=10, adjust=False).mean()
         df['MACD'] = exp1 - exp2
         df['MACD_Signal'] = df['MACD'].ewm(span=16, adjust=False).mean()
-
         df['BB_Middle'] = df['Close'].rolling(20).mean()
         df['BB_Std'] = df['Close'].rolling(20).std()
         df['BB_Upper'] = df['BB_Middle'] + (2 * df['BB_Std'])
         df['BB_Lower'] = df['BB_Middle'] - (2 * df['BB_Std'])
 
-        # --- Signal Heatmap Tracker ---
-        heatmap_row = {"Ticker": ticker}
+        # Signal Matrix Row
+        heatmap_row = {"Ticker": ticker, "Label": f"{ticker} — {company}"}
         for strat in bullish_strategies + bearish_strategies:
             heatmap_row[strat] = 0
 
-        # --- Bullish Strategies ---
-        if "Trend Trading" in selected_bullish:
-            if df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1]:
-                signals.append((ticker, "📈 Bullish - Trend Trading"))
-                heatmap_row["Trend Trading"] = 1
+        # Bullish Strategies
+        if "Trend Trading" in selected_bullish and df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1]:
+            signals.append((ticker, f"📈 Bullish - Trend Trading — {company}"))
+            heatmap_row["Trend Trading"] = 1
 
-        if "RSI Oversold" in selected_bullish:
-            if df['RSI'].iloc[-1] < 30:
-                signals.append((ticker, f"📈 Bullish - RSI Oversold (RSI={df['RSI'].iloc[-1]:.1f})"))
-                heatmap_row["RSI Oversold"] = 1
+        if "RSI Oversold" in selected_bullish and df['RSI'].iloc[-1] < 30:
+            signals.append((ticker, f"📈 Bullish - RSI Oversold — {company} (RSI={df['RSI'].iloc[-1]:.1f})"))
+            heatmap_row["RSI Oversold"] = 1
 
         if "MACD Bullish Crossover" in selected_bullish:
             if df['MACD'].iloc[-2] < df['MACD_Signal'].iloc[-2] and df['MACD'].iloc[-1] > df['MACD_Signal'].iloc[-1]:
-                signals.append((ticker, "📈 Bullish - MACD Bullish Crossover"))
+                signals.append((ticker, f"📈 Bullish - MACD Bullish Crossover — {company}"))
                 heatmap_row["MACD Bullish Crossover"] = 1
 
-        if pd.notna(df['BB_Upper'].iloc[-1]) and df['Close'].iloc[-1] > df['BB_Upper'].iloc[-1]:
-            signals.append(f"📈 Bollinger Breakout — {company}")
-            row["Bollinger Breakout"] = 1
+        if "Bollinger Breakout" in selected_bullish and df['Close'].iloc[-1] > df['BB_Upper'].iloc[-1]:
+            signals.append((ticker, f"📈 Bullish - Bollinger Breakout — {company}"))
+            heatmap_row["Bollinger Breakout"] = 1
 
-        # --- Bearish Strategies ---
-        if "RSI Overbought" in selected_bearish:
-            if df['RSI'].iloc[-1] > 70:
-                signals.append((ticker, f"📉 Bearish - RSI Overbought (RSI={df['RSI'].iloc[-1]:.1f})"))
-                heatmap_row["RSI Overbought"] = 1
+        # Bearish Strategies
+        if "RSI Overbought" in selected_bearish and df['RSI'].iloc[-1] > 70:
+            signals.append((ticker, f"📉 Bearish - RSI Overbought — {company} (RSI={df['RSI'].iloc[-1]:.1f})"))
+            heatmap_row["RSI Overbought"] = 1
 
         if "MACD Bearish Crossover" in selected_bearish:
             if df['MACD'].iloc[-2] > df['MACD_Signal'].iloc[-2] and df['MACD'].iloc[-1] < df['MACD_Signal'].iloc[-1]:
-                signals.append((ticker, "📉 Bearish - MACD Bearish Crossover"))
+                signals.append((ticker, f"📉 Bearish - MACD Bearish Crossover — {company}"))
                 heatmap_row["MACD Bearish Crossover"] = 1
 
-        if pd.notna(df['BB_Upper'].iloc[-1]):
-            high_val = df['High'].iloc[-1]
-            close_val = df['Close'].iloc[-1]
-            upper_bb = df['BB_Upper'].iloc[-1]
-
-            if high_val >= upper_bb and close_val < upper_bb:
-                signals.append(f"📉 Bollinger Rejection — {company}")
-                row["Bollinger Rejection"] = 1
+        if "Bollinger Rejection" in selected_bearish:
+            if df['High'].iloc[-1] >= df['BB_Upper'].iloc[-1] and df['Close'].iloc[-1] < df['BB_Upper'].iloc[-1]:
+                signals.append((ticker, f"📉 Bearish - Bollinger Rejection — {company}"))
+                heatmap_row["Bollinger Rejection"] = 1
 
         heatmap_data.append(heatmap_row)
 
@@ -133,15 +141,15 @@ if signals:
 else:
     st.info("No trade signals at this time.")
 
-# --- Matrix + Combined Heatmap ---
+# --- Heatmap Matrix + Visual ---
 if heatmap_data:
     st.markdown("### 🧭 Strategy Signal Matrix")
 
     heatmap_df = pd.DataFrame(heatmap_data)
-    heatmap_df["Bullish Total"] = heatmap_df[[s for s in bullish_strategies]].sum(axis=1)
-    heatmap_df["Bearish Total"] = heatmap_df[[s for s in bearish_strategies]].sum(axis=1)
+    heatmap_df["Bullish Total"] = heatmap_df[bullish_strategies].sum(axis=1)
+    heatmap_df["Bearish Total"] = heatmap_df[bearish_strategies].sum(axis=1)
 
-    ordered_cols = ["Ticker"] + bullish_strategies + ["Bullish Total"] + bearish_strategies + ["Bearish Total"]
+    ordered_cols = ["Label"] + bullish_strategies + ["Bullish Total"] + bearish_strategies + ["Bearish Total"]
     heatmap_df = heatmap_df[ordered_cols]
 
     st.dataframe(
@@ -150,23 +158,24 @@ if heatmap_data:
         .highlight_max(axis=0, subset=["Bearish Total"], color="salmon")
     )
 
-    # --- Combined Heatmap Chart ---
-    st.markdown("### 🔥 Visual Heatmap of Strategy Activation")
+    # --- Combined Heatmap Visualization ---
+    st.markdown("### 🔥 Strategy Activation Heatmap")
 
-    matrix = heatmap_df.set_index("Ticker")[bullish_strategies + bearish_strategies]
+    matrix = heatmap_df.set_index("Label")[bullish_strategies + bearish_strategies]
 
-    def custom_color(val, strat):
+       def custom_color(val, strat):
         if val == 0:
-            return 0.0  # Neutral gray
+            return 0.0  # neutral gray
         elif strat in bullish_strategies:
-            return 1.0  # Green
+            return 1.0  # green
         elif strat in bearish_strategies:
-            return -1.0  # Red
+            return -1.0  # red
 
     matrix_scaled = matrix.copy()
     for col in matrix.columns:
         matrix_scaled[col] = matrix[col].apply(lambda v: custom_color(v, col))
 
+    # Define diverging colors: red → gray → green
     custom_colorscale = [
         [0.0, "lightcoral"],
         [0.5, "#eeeeee"],
