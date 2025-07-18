@@ -109,10 +109,6 @@ for ticker in TICKERS:
                 signals.append((ticker, f"📈 Bullish - MACD Bullish Crossover — {company}"))
                 heatmap_row["MACD Bullish Crossover"] = 1
 
-        if "Bollinger Breakout" in selected_bullish and df['Close'].iloc[-1] > df['BB_Upper'].iloc[-1]:
-            signals.append((ticker, f"📈 Bullish - Bollinger Breakout — {company}"))
-            heatmap_row["Bollinger Breakout"] = 1
-
         # Bearish Strategies
         if "RSI Overbought" in selected_bearish and df['RSI'].iloc[-1] > 70:
             signals.append((ticker, f"📉 Bearish - RSI Overbought — {company} (RSI={df['RSI'].iloc[-1]:.1f})"))
@@ -122,11 +118,6 @@ for ticker in TICKERS:
             if df['MACD'].iloc[-2] > df['MACD_Signal'].iloc[-2] and df['MACD'].iloc[-1] < df['MACD_Signal'].iloc[-1]:
                 signals.append((ticker, f"📉 Bearish - MACD Bearish Crossover — {company}"))
                 heatmap_row["MACD Bearish Crossover"] = 1
-
-        if "Bollinger Rejection" in selected_bearish:
-            if df['High'].iloc[-1] >= df['BB_Upper'].iloc[-1] and df['Close'].iloc[-1] < df['BB_Upper'].iloc[-1]:
-                signals.append((ticker, f"📉 Bearish - Bollinger Rejection — {company}"))
-                heatmap_row["Bollinger Rejection"] = 1
 
         heatmap_data.append(heatmap_row)
 
