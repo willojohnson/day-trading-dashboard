@@ -24,6 +24,10 @@ bearish_strategies = ["MACD Bearish Crossover", "RSI Overbought", "Bollinger Rej
 selected_bullish = st.sidebar.multiselect("📈 Bullish Strategies", bullish_strategies)
 selected_bearish = st.sidebar.multiselect("📉 Bearish Strategies", bearish_strategies)
 
+if not selected_bullish and not selected_bearish:
+    st.warning("👆 Please select at least one strategy to activate the dashboard.")
+    st.stop()
+
 # --- Strategy Definitions ---
 st.sidebar.markdown("### 📘 Strategy Definitions")
 st.sidebar.markdown("""
