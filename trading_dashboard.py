@@ -163,7 +163,7 @@ if heatmap_data:
 
     matrix = heatmap_df.set_index("Label")[bullish_strategies + bearish_strategies]
 
-        def custom_color(val, strat):
+    def custom_color(val, strat):
         if val == 0:
             return 0.0  # neutral gray
         elif strat in bullish_strategies:
