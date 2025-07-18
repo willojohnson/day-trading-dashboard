@@ -44,12 +44,13 @@ selected_bearish = st.sidebar.multiselect("📉 Bearish Strategies", bearish_str
 
 # --- Strategy Definitions ---
 st.sidebar.markdown("### 📘 Strategy Definitions")
-st.sidebar.markdown(""")
+st.sidebar.markdown("""
 **Trend Trading**: 20MA > 50MA  
 **RSI Overbought**: RSI > 70  
 **RSI Oversold**: RSI < 30  
 **MACD Bullish Crossover**: MACD crosses above Signal  
-**MACD Bearish Crossover**: MACD crosses below Signal  
+**MACD Bearish Crossover**: MACD crosses below Signal
+""")
 
 # --- Signal Detection ---
 now = datetime.datetime.now()
