@@ -78,6 +78,7 @@ for ticker in TICKERS:
             continue
 
         # Initial check for minimum data length for any MA or crossover calculation (200 for 200MA, 2 for crossovers)
+        # This prevents IndexErrors when trying to access iloc[-1] or iloc[-2]
         if len(df) < 200:
             st.info(f"ℹ️ Not enough historical data for {ticker} ({company}) for 200-period MA calculation. Skipping strategies.")
             heatmap_row = {"Ticker": ticker, "Label": f"{ticker} — {company}"}
@@ -113,63 +114,77 @@ for ticker in TICKERS:
         exp1 = df['Close'].ewm(span=12, adjust=False).mean()
         exp2 = df['Close'].ewm(span=26, adjust=False).mean()
         df['MACD'] = exp1 - exp2
-        df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+        df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean() 
 
         # Signal Matrix Row Initialization
         heatmap_row = {"Ticker": ticker, "Label": f"{ticker} — {company}"}
         for strat in bullish_strategies + bearish_strategies:
             heatmap_row[strat] = 0
 
-        # --- Extract latest scalar values explicitly using .item() and handle NaNs ---
-        # This ensures all variables used in subsequent logic are pure Python scalars, not Series.
+        # --- Robust Scalar Extraction and NaN Handling ---
+        # This section ensures all values used in strategy logic are pure Python scalars.
         
-        # Initialize all scalar variables to None or a safe default
-        ma20_1, ma50_1, ma200_1, ma50_2, ma200_2 = [None] * 5
-        rsi_1 = None
-        macd_1, macd_signal_1, macd_2, macd_signal_2 = [None] * 4
-        volume_1, avg_volume_1 = [None] * 2
-
-        # Safely extract values using .item() if not NaN
-        try:
-            if pd.notna(df['20_MA'].iloc[-1]): ma20_1 = df['20_MA'].iloc[-1].item()
-            if pd.notna(df['50_MA'].iloc[-1]): ma50_1 = df['50_MA'].iloc[-1].item()
-            if pd.notna(df['200_MA'].iloc[-1]): ma200_1 = df['200_MA'].iloc[-1].item()
-            if pd.notna(df['RSI'].iloc[-1]): rsi_1 = df['RSI'].iloc[-1].item()
-            if pd.notna(df['MACD'].iloc[-1]): macd_1 = df['MACD'].iloc[-1].item()
-            if pd.notna(df['MACD_Signal'].iloc[-1]): macd_signal_1 = df['MACD_Signal'].iloc[-1].item()
-            if pd.notna(df['Volume'].iloc[-1]): volume_1 = df['Volume'].iloc[-1].item()
-            if pd.notna(df['Avg_Volume'].iloc[-1]): avg_volume_1 = df['Avg_Volume'].iloc[-1].item()
-
-            # For values needing iloc[-2], also check for its existence first
-            if len(df) >= 2: # Already checked above, but defensive
-                if pd.notna(df['50_MA'].iloc[-2]): ma50_2 = df['50_MA'].iloc[-2].item()
-                if pd.notna(df['200_MA'].iloc[-2]): ma200_2 = df['200_MA'].iloc[-2].item()
-                if pd.notna(df['MACD'].iloc[-2]): macd_2 = df['MACD'].iloc[-2].item()
-                if pd.notna(df['MACD_Signal'].iloc[-2]): macd_signal_2 = df['MACD_Signal'].iloc[-2].item()
-
-        except ValueError: # .item() can raise this if Series has >1 element (unlikely for iloc[-1])
-            st.error(f"Error extracting scalar values for {ticker}. Skipping strategy checks.")
-            heatmap_data.append(heatmap_row)
-            continue
-        except IndexError: # iloc[-1] or .item() can raise this if Series is empty (handled by len(df) checks)
-            st.error(f"Index error during scalar extraction for {ticker}. Skipping strategy checks.")
-            heatmap_data.append(heatmap_row)
-            continue
-
-        # Check if all critical values for strategy evaluation are available (not None)
-        # This acts as the consolidated NaN/data sufficiency check for strategy logic
-        required_values = [ma20_1, ma50_1, ma200_1, rsi_1, macd_1, macd_signal_1, \
-                           ma50_2, ma200_2, macd_2, macd_signal_2, \
-                           volume_1, avg_volume_1]
+        # Dictionary to hold extracted scalar values
+        extracted_values = {}
         
-        if any(v is None for v in required_values):
-            st.info(f"ℹ️ Incomplete indicator data for {ticker} ({company}). Skipping strategy checks for this ticker.")
-            heatmap_data.append(heatmap_row)
+        # Define which columns and indices to try to extract
+        columns_to_extract = {
+            '20_MA': [-1], '50_MA': [-1, -2], '200_MA': [-1, -2], 'RSI': [-1],
+            'MACD': [-1, -2], 'MACD_Signal': [-1, -2],
+            'Volume': [-1], 'Avg_Volume': [-1]
+        }
+
+        for col, indices in columns_to_extract.items():
+            for idx in indices:
+                key_suffix = "current" if idx == -1 else "prev"
+                dict_key = f"{col}_{key_suffix}"
+                
+                if col in df.columns and len(df) >= abs(idx):
+                    val = df[col].iloc[idx]
+                    if pd.notna(val):
+                        try:
+                            extracted_values[dict_key] = float(val)
+                        except (ValueError, TypeError) as e: 
+                            # --- DEBUGGING PRINT ADDED HERE ---
+                            print(f"DEBUG: Failed to convert '{val}' (type: {type(val)}) from column '{col}' at index {idx} for ticker {ticker}. Error: {e}")
+                            st.warning(f"⚠️ Data conversion issue for {ticker} - '{col}' at index {idx}. Value: '{val}' (Type: {type(val)}). Setting to None.")
+                            extracted_values[dict_key] = None
+                    else:
+                        extracted_values[dict_key] = None 
+                else:
+                    extracted_values[dict_key] = None 
+
+        # --- Consolidated Check for Sufficient & Valid Data for Strategies ---
+        required_keys_for_strategy_eval = [
+            '20_MA_current', '50_MA_current', '200_MA_current', 'RSI_current',
+            'MACD_current', 'MACD_Signal_current', 'MACD_prev', 'MACD_Signal_prev',
+            '50_MA_prev', '200_MA_prev',
+            'Volume_current', 'Avg_Volume_current'
+        ]
+        
+        if not all(key in extracted_values and extracted_values[key] is not None for key in required_keys_for_strategy_eval):
+            st.info(f"ℹ️ Incomplete or invalid essential indicator data for {ticker} ({company}). Skipping all strategy checks for this ticker.")
+            heatmap_data.append(heatmap_row) 
             continue
 
-        # --- Reusable conditions for clarity in confirmation strategies (now using pure scalars) ---
+        # --- Assign scalar variables for cleaner access in strategy logic ---
+        ma20_1 = extracted_values['20_MA_current']
+        ma50_1 = extracted_values['50_MA_current']
+        ma200_1 = extracted_values['200_MA_current']
+        rsi_1 = extracted_values['RSI_current']
+        macd_1 = extracted_values['MACD_current']
+        macd_signal_1 = extracted_values['MACD_Signal_current']
+        volume_1 = extracted_values['Volume_current']
+        avg_volume_1 = extracted_values['Avg_Volume_current']
+
+        ma50_2 = extracted_values['50_MA_prev']
+        ma200_2 = extracted_values['200_MA_prev']
+        macd_2 = extracted_values['MACD_prev']
+        macd_signal_2 = extracted_values['MACD_Signal_prev']
+
+        # --- Reusable conditions (now using pure scalar variables) ---
         is_above_avg_volume = False
-        if avg_volume_1 != 0: # Avoid division by zero
+        if avg_volume_1 != 0: 
             is_above_avg_volume = volume_1 > 1.2 * avg_volume_1
 
         macd_bullish_crossover = (macd_2 < macd_signal_2 and macd_1 > macd_signal_1)
@@ -235,7 +250,8 @@ for ticker in TICKERS:
         heatmap_data.append(heatmap_row)
 
     except Exception as e:
-        st.error(f"❌ Error processing {ticker} ({company}): {e}")
+        # Catch any unexpected errors that bypass specific checks
+        st.error(f"❌ An unexpected error occurred while processing {ticker} ({company}): {e}")
 
 # --- Signal Display ---
 if signals:
