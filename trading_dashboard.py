@@ -41,13 +41,13 @@ bullish_strategies = [
     "Trend Trading", "MACD Bullish Crossover", "RSI Oversold",
     "Golden Cross", "Trend + MACD Bullish", "Golden Cross + Volume",
     "Bollinger Bullish Breakout",
-    "OBV Bullish Trend Confirmation" # Kept
+    "OBV Bullish Trend Confirmation" 
 ]
 bearish_strategies = [
     "MACD Bearish Crossover", "RSI Overbought", "Death Cross",
     "Death Cross + RSI Bearish", "Death Cross + Volume",
     "Bollinger Bearish Breakout",
-    "OBV Bearish Trend Confirmation" # Kept
+    "OBV Bearish Trend Confirmation" 
 ]
 
 selected_bullish = bullish_strategies
@@ -70,8 +70,8 @@ st.sidebar.markdown("**Death Cross + Volume**: Death Cross AND Above-Avg Volume 
 st.sidebar.markdown("**Bollinger Bullish Breakout**: Close crosses above Upper Bollinger Band (20-period)")
 st.sidebar.markdown("**Bollinger Bearish Breakout**: Close crosses below Lower Bollinger Band (20-period)")
 st.sidebar.markdown("---")
-st.sidebar.markdown("**OBV Bullish Trend Confirmation**: Current Close > Previous Close AND Current OBV > Previous OBV") # Kept
-st.sidebar.markdown("**OBV Bearish Trend Confirmation**: Current Close < Previous Close AND Current OBV < Previous OBV") # Kept
+st.sidebar.markdown("**OBV Bullish Trend Confirmation**: Current Close > Previous Close AND Current OBV > Previous OBV") 
+st.sidebar.markdown("**OBV Bearish Trend Confirmation**: Current Close < Previous Close AND Current OBV < Previous OBV") 
 
 
 # --- Signal Detection ---
@@ -133,7 +133,7 @@ for ticker in TICKERS:
         df['Upper_BB'] = df['20_MA'] + (df['StdDev'] * 2)
         df['Lower_BB'] = df['20_MA'] - (df['StdDev'] * 2)
 
-        # On-Balance Volume (OBV) - Kept
+        # On-Balance Volume (OBV)
         df['OBV'] = 0
         for i in range(1, len(df)):
             if df['Close'].iloc[i] > df['Close'].iloc[i-1]:
@@ -154,11 +154,19 @@ for ticker in TICKERS:
             if pd.isna(series_or_scalar):
                 return None
             try:
+                # Attempt to get the scalar value using .item()
                 return series_or_scalar.item()
             except AttributeError:
-                return series_or_scalar
+                # If it doesn't have .item(), it might already be a scalar (int, float, etc.)
+                # We need to ensure it's a true scalar.
+                if isinstance(series_or_scalar, (int, float, bool)):
+                    return series_or_scalar
+                # If it's not a basic scalar type and has no .item(), it's problematic
+                # Treat as None, as it's not a clean scalar for comparisons.
+                return None
             except Exception as e:
-                print(f"DEBUG: Failed to extract scalar for {series_or_scalar}. Error: {e}")
+                # Catch any other unexpected errors during item extraction
+                print(f"DEBUG: Failed to extract scalar for {type(series_or_scalar)} (value: {series_or_scalar}). Error: {e}")
                 return None
 
         # Initialize all variables to None
@@ -166,7 +174,7 @@ for ticker in TICKERS:
         ma50_2, ma200_2, macd_2, macd_signal_2 = [None] * 4
         close_1, close_2, upper_bb_1, upper_bb_2, lower_bb_1, lower_bb_2 = [None] * 6
         
-        # OBV scalars - Kept
+        # OBV scalars
         obv_1, obv_2 = [None] * 2
 
         try:
@@ -183,7 +191,7 @@ for ticker in TICKERS:
                 close_1 = get_scalar_value(df['Close'].iloc[-1])
                 upper_bb_1 = get_scalar_value(df['Upper_BB'].iloc[-1])
                 lower_bb_1 = get_scalar_value(df['Lower_BB'].iloc[-1])
-                obv_1 = get_scalar_value(df['OBV'].iloc[-1]) # Kept
+                obv_1 = get_scalar_value(df['OBV'].iloc[-1])
 
             # Previous values (iloc[-2])
             if not df.empty and len(df) >= 2:
@@ -194,7 +202,7 @@ for ticker in TICKERS:
                 close_2 = get_scalar_value(df['Close'].iloc[-2])
                 upper_bb_2 = get_scalar_value(df['Upper_BB'].iloc[-2])
                 lower_bb_2 = get_scalar_value(df['Lower_BB'].iloc[-2])
-                obv_2 = get_scalar_value(df['OBV'].iloc[-2]) # Kept
+                obv_2 = get_scalar_value(df['OBV'].iloc[-2])
 
         except ValueError as ve:
             st.error(f"❌ Value Error during scalar extraction for {ticker} ({company}): {ve}. This might indicate unexpected data. Skipping strategy checks.")
@@ -216,14 +224,14 @@ for ticker in TICKERS:
                             volume_1, avg_volume_1,
                             macd_2, macd_signal_2, ma50_2, ma200_2,
                             close_1, close_2, upper_bb_1, upper_bb_2, lower_bb_1, lower_bb_2,
-                            obv_1, obv_2] # Stochastic scalars removed
+                            obv_1, obv_2] 
 
         if any(s is None for s in required_scalars):
             st.info(f"ℹ️ Not enough complete indicator data (or data conversion issues) for {ticker} ({company}). Skipping strategy checks for this ticker.")
             for s_name, s_value in zip(['ma20_1', 'ma50_1', 'ma200_1', 'rsi_1', 'macd_1', 'macd_signal_1',
                                         'volume_1', 'avg_volume_1', 'macd_2', 'macd_signal_2', 'ma50_2', 'ma200_2',
                                         'close_1', 'close_2', 'upper_bb_1', 'upper_bb_2', 'lower_bb_1', 'lower_bb_2',
-                                        'obv_1', 'obv_2'], required_scalars): # Stochastic names removed
+                                        'obv_1', 'obv_2'], required_scalars):
                 if s_value is None:
                     print(f"DEBUG: For {ticker}, '{s_name}' is None.")
             heatmap_data.append(heatmap_row)
@@ -242,7 +250,7 @@ for ticker in TICKERS:
         bollinger_bullish_breakout = (close_2 <= upper_bb_2 and close_1 > upper_bb_1)
         bollinger_bearish_breakout = (close_2 >= lower_bb_2 and close_1 < lower_bb_1)
 
-        # OBV Trend Confirmation - Kept
+        # OBV Trend Confirmation
         obv_bullish_trend_confirm = (close_1 > close_2 and obv_1 > obv_2)
         obv_bearish_trend_confirm = (close_1 < close_2 and obv_1 < obv_2)
 
@@ -278,7 +286,7 @@ for ticker in TICKERS:
             signals.append((ticker, "bullish", f"💥 Bullish - Bollinger Breakout — {company}"))
             heatmap_row["Bollinger Bullish Breakout"] = 1
         
-        # OBV Bullish Strategies - Kept
+        # OBV Bullish Strategies
         if "OBV Bullish Trend Confirmation" in selected_bullish and obv_bullish_trend_confirm:
             signals.append((ticker, "bullish", f"📊 Bullish - OBV Trend Confirmed — {company}"))
             heatmap_row["OBV Bullish Trend Confirmation"] = 1
@@ -312,7 +320,7 @@ for ticker in TICKERS:
             signals.append((ticker, "bearish", f"📉 Bearish - Bollinger Breakout — {company}"))
             heatmap_row["Bollinger Bearish Breakout"] = 1
 
-        # OBV Bearish Strategies - Kept
+        # OBV Bearish Strategies
         if "OBV Bearish Trend Confirmation" in selected_bearish and obv_bearish_trend_confirm:
             signals.append((ticker, "bearish", f"📉 Bearish - OBV Trend Confirmed — {company}"))
             heatmap_row["OBV Bearish Trend Confirmation"] = 1
