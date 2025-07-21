@@ -37,8 +37,8 @@ refresh_rate = st.sidebar.slider("Refresh every N seconds", min_value=30, max_va
 st_autorefresh(interval=refresh_rate * 1000, key="autorefresh")
 
 # --- Strategy Selectors ---
-bullish_strategies = ["Trend Trading", "MACD Bullish Crossover", "RSI Oversold", "Golden Cross", "Trend + MACD Bullish", "Golden Cross + Volume"] # Added
-bearish_strategies = ["MACD Bearish Crossover", "RSI Overbought", "Death Cross", "Death Cross + RSI Bearish", "Death Cross + Volume"] # Added
+bullish_strategies = ["Trend Trading", "MACD Bullish Crossover", "RSI Oversold", "Golden Cross", "Trend + MACD Bullish", "Golden Cross + Volume"]
+bearish_strategies = ["MACD Bearish Crossover", "RSI Overbought", "Death Cross", "Death Cross + RSI Bearish", "Death Cross + Volume"]
 
 selected_bullish = bullish_strategies
 selected_bearish = bearish_strategies
@@ -52,16 +52,16 @@ st.sidebar.markdown("**MACD Bullish Crossover**: MACD crosses above Signal")
 st.sidebar.markdown("**MACD Bearish Crossover**: MACD crosses below Signal")
 st.sidebar.markdown("**Death Cross**: 50MA crosses below 200MA")
 st.sidebar.markdown("**Golden Cross**: 50MA crosses above 200MA")
-st.sidebar.markdown("---") # Separator for clarity
-st.sidebar.markdown("**Trend + MACD Bullish**: 20MA > 50MA AND MACD Bullish Crossover") # Existing Confirmation
-st.sidebar.markdown("**Death Cross + RSI Bearish**: 50MA < 200MA AND RSI > 70") # Existing Confirmation
-st.sidebar.markdown("**Golden Cross + Volume**: Golden Cross AND Above-Avg Volume") # New Confirmation
-st.sidebar.markdown("**Death Cross + Volume**: Death Cross AND Above-Avg Volume") # New Confirmation
+st.sidebar.markdown("---")
+st.sidebar.markdown("**Trend + MACD Bullish**: 20MA > 50MA AND MACD Bullish Crossover")
+st.sidebar.markdown("**Death Cross + RSI Bearish**: 50MA < 200MA AND RSI > 70")
+st.sidebar.markdown("**Golden Cross + Volume**: Golden Cross AND Above-Avg Volume")
+st.sidebar.markdown("**Death Cross + Volume**: Death Cross AND Above-Avg Volume")
 
 
 # --- Signal Detection ---
 now = datetime.datetime.now()
-start = now - datetime.timedelta(days=60) # Max for 5m interval is typically 60 days.
+start = now - datetime.timedelta(days=60)
 end = now
 
 signals = []
@@ -77,8 +77,7 @@ for ticker in TICKERS:
             st.warning(f"⚠️ No valid data for {ticker} ({company}). Skipping...")
             continue
 
-        # Ensure enough data for calculations (especially for 200-period MA)
-        if len(df) < 200: # Need at least 200 periods for 200MA and 20-period Avg Volume
+        if len(df) < 200:
             st.info(f"ℹ️ Not enough data for {ticker} ({company}) to calculate all indicators (requires 200 bars). Skipping...")
             heatmap_row = {"Ticker": ticker, "Label": f"{ticker} — {company}"}
             for strat in bullish_strategies + bearish_strategies:
@@ -90,7 +89,7 @@ for ticker in TICKERS:
         df['20_MA'] = df['Close'].rolling(window=20).mean()
         df['50_MA'] = df['Close'].rolling(window=50).mean()
         df['200_MA'] = df['Close'].rolling(window=200).mean()
-        df['Avg_Volume'] = df['Volume'].rolling(window=20).mean() # New: Average Volume
+        df['Avg_Volume'] = df['Volume'].rolling(window=20).mean()
 
         delta = df['Close'].diff()
         gain = delta.clip(lower=0)
@@ -111,7 +110,6 @@ for ticker in TICKERS:
             heatmap_row[strat] = 0
 
         # Check for NaN values at the end of the dataframe for indicators
-        # Ensure we have at least 2 bars for MACD/MA crossovers and sufficient data for Avg_Volume
         if len(df) < 2 or \
            pd.isna(df['20_MA'].iloc[-1]) or pd.isna(df['50_MA'].iloc[-1]) or \
            pd.isna(df['200_MA'].iloc[-1]) or pd.isna(df['RSI'].iloc[-1]) or \
@@ -124,9 +122,10 @@ for ticker in TICKERS:
             continue
 
         # Reusable conditions for clarity in confirmation strategies
-        current_volume = df['Volume'].iloc[-1]
-        avg_volume = df['Avg_Volume'].iloc[-1]
-        is_above_avg_volume = current_volume > 1.2 * avg_volume # 20% above average volume threshold
+        # --- FIX: Use .item() to ensure scalar values ---
+        current_volume = df['Volume'].iloc[-1].item()
+        avg_volume = df['Avg_Volume'].iloc[-1].item()
+        is_above_avg_volume = current_volume > 1.2 * avg_volume # This will now be a pure boolean
 
         # MACD Bullish Crossover Condition
         macd_bullish_crossover = (df['MACD'].iloc[-2] < df['MACD_Signal'].iloc[-2] and \
