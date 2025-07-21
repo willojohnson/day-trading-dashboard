@@ -205,10 +205,17 @@ if heatmap_data:
     ordered_cols = ["Label"] + bullish_strategies + ["Bullish Total"] + bearish_strategies + ["Bearish Total"]
     heatmap_df = heatmap_df[ordered_cols]
 
+    # --- CUSTOM STYLING FOR BEARISH TOTAL ---
+    def highlight_bearish_total(val):
+        """Highlights the 'Bearish Total' cell red if value is 1 or more, otherwise no color."""
+        if val >= 1:
+            return 'background-color: salmon'
+        return '' # No background color
+
     st.dataframe(
         heatmap_df.style
         .highlight_max(axis=0, subset=["Bullish Total"], color="lightgreen")
-        .highlight_max(axis=0, subset=["Bearish Total"], color="salmon")
+        .applymap(highlight_bearish_total, subset=['Bearish Total']) # Apply custom styling
     )
 
     # --- Combined Heatmap Visualization ---
