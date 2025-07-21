@@ -24,7 +24,7 @@ TICKER_NAMES = {
     "CRSP": "CRISPR Therapeutics AG",
     "TSM": "Taiwan Semiconductor",
     "DDOG": "Datadog Inc."
-    "BTSG": "BrightSpring Health Services",
+    "BTSG": "BrightSpring Health Services"
 }
 
 # --- Page Setup ---
