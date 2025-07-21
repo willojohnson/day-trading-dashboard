@@ -6,7 +6,7 @@ from streamlit_autorefresh import st_autorefresh
 import plotly.express as px
 
 # --- Tickers to Monitor ---
-TICKERS = ["NVDA", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP", "TSM", "DDOG"]
+TICKERS = ["NVDA", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP", "TSM", "DDOG", "BTSG"]
 
 # --- Ticker to Company Name Mapping ---
 TICKER_NAMES = {
@@ -24,6 +24,7 @@ TICKER_NAMES = {
     "CRSP": "CRISPR Therapeutics AG",
     "TSM": "Taiwan Semiconductor",
     "DDOG": "Datadog Inc."
+    "BTSG": "BrightSpring Health Services",
 }
 
 # --- Page Setup ---
