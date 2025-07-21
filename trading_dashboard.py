@@ -37,10 +37,9 @@ refresh_rate = st.sidebar.slider("Refresh every N seconds", min_value=30, max_va
 st_autorefresh(interval=refresh_rate * 1000, key="autorefresh")
 
 # --- Strategy Selectors ---
-bullish_strategies = ["Trend Trading", "MACD Bullish Crossover", "RSI Oversold", "Golden Cross"]
-bearish_strategies = ["MACD Bearish Crossover", "RSI Overbought", "Death Cross"]
+bullish_strategies = ["Trend Trading", "MACD Bullish Crossover", "RSI Oversold", "Golden Cross", "Trend + MACD Bullish"] # Added Confirmation Strategy
+bearish_strategies = ["MACD Bearish Crossover", "RSI Overbought", "Death Cross", "Death Cross + RSI Bearish"] # Added Confirmation Strategy
 
-# Removed st.multiselect and set selected_bullish/bearish to include all strategies
 selected_bullish = bullish_strategies
 selected_bearish = bearish_strategies
 
@@ -53,18 +52,20 @@ st.sidebar.markdown("**MACD Bullish Crossover**: MACD crosses above Signal")
 st.sidebar.markdown("**MACD Bearish Crossover**: MACD crosses below Signal")
 st.sidebar.markdown("**Death Cross**: 50MA crosses below 200MA")
 st.sidebar.markdown("**Golden Cross**: 50MA crosses above 200MA")
+st.sidebar.markdown("---") # Separator for clarity
+st.sidebar.markdown("**Trend + MACD Bullish**: 20MA > 50MA AND MACD Bullish Crossover") # New Confirmation
+st.sidebar.markdown("**Death Cross + RSI Bearish**: 50MA < 200MA AND RSI > 70") # New Confirmation
 
 
 # --- Signal Detection ---
 now = datetime.datetime.now()
-# Increased historical data fetch for 200MA. Max for 5m interval is typically 60 days.
-start = now - datetime.timedelta(days=60)
+start = now - datetime.timedelta(days=60) # Max for 5m interval is typically 60 days.
 end = now
 
 signals = []
 heatmap_data = []
 
-st.subheader("⚙️ Processing Data and Generating Signals...") # Added a general processing message
+st.subheader("⚙️ Processing Data and Generating Signals...")
 
 for ticker in TICKERS:
     company = TICKER_NAMES.get(ticker, ticker)
@@ -74,10 +75,8 @@ for ticker in TICKERS:
             st.warning(f"⚠️ No valid data for {ticker} ({company}). Skipping...")
             continue
 
-        # Ensure enough data for calculations (especially for 200-period MA)
         if len(df) < 200: # Need at least 200 periods for 200MA
             st.info(f"ℹ️ Not enough data for {ticker} ({company}) to calculate all indicators (requires 200 bars). Skipping...")
-            # Initialize heatmap_row even if not enough data for signals
             heatmap_row = {"Ticker": ticker, "Label": f"{ticker} — {company}"}
             for strat in bullish_strategies + bearish_strategies:
                 heatmap_row[strat] = 0
@@ -87,34 +86,36 @@ for ticker in TICKERS:
         # Indicators
         df['20_MA'] = df['Close'].rolling(window=20).mean()
         df['50_MA'] = df['Close'].rolling(window=50).mean()
-        df['200_MA'] = df['Close'].rolling(window=200).mean() # 200 MA
+        df['200_MA'] = df['Close'].rolling(window=200).mean()
 
         delta = df['Close'].diff()
         gain = delta.clip(lower=0)
         loss = -delta.clip(upper=0)
-        avg_gain = gain.ewm(com=13, adjust=False).mean() # Using EWM for RSI
-        avg_loss = loss.ewm(com=13, adjust=False).mean() # Using EWM for RSI
-        
-        # Handle division by zero for rs in RSI calculation
-        rs = avg_gain / avg_loss.replace(0, 1e-9) 
+        avg_gain = gain.ewm(com=13, adjust=False).mean()
+        avg_loss = loss.ewm(com=13, adjust=False).mean()
+        rs = avg_gain / avg_loss.replace(0, 1e-9)
         df['RSI'] = 100 - (100 / (1 + rs))
 
-        exp1 = df['Close'].ewm(span=12, adjust=False).mean() # Standard MACD fast period
-        exp2 = df['Close'].ewm(span=26, adjust=False).mean() # Standard MACD slow period
+        exp1 = df['Close'].ewm(span=12, adjust=False).mean()
+        exp2 = df['Close'].ewm(span=26, adjust=False).mean()
         df['MACD'] = exp1 - exp2
-        df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean() # Standard MACD signal period
+        df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
 
         # Signal Matrix Row Initialization
         heatmap_row = {"Ticker": ticker, "Label": f"{ticker} — {company}"}
         for strat in bullish_strategies + bearish_strategies:
-            heatmap_row[strat] = 0 # Initialize all strategy columns to 0 (no signal)
+            heatmap_row[strat] = 0
 
         # Check for NaN values at the end of the dataframe for indicators
-        if pd.isna(df['20_MA'].iloc[-1]) or pd.isna(df['50_MA'].iloc[-1]) or \
+        # Ensure we have at least 2 bars for MACD/MA crossovers
+        if len(df) < 2 or \
+           pd.isna(df['20_MA'].iloc[-1]) or pd.isna(df['50_MA'].iloc[-1]) or \
            pd.isna(df['200_MA'].iloc[-1]) or pd.isna(df['RSI'].iloc[-1]) or \
-           pd.isna(df['MACD'].iloc[-1]) or pd.isna(df['MACD_Signal'].iloc[-1]):
+           pd.isna(df['MACD'].iloc[-1]) or pd.isna(df['MACD_Signal'].iloc[-1]) or \
+           pd.isna(df['MACD'].iloc[-2]) or pd.isna(df['MACD_Signal'].iloc[-2]) or \
+           pd.isna(df['50_MA'].iloc[-2]) or pd.isna(df['200_MA'].iloc[-2]):
             st.info(f"ℹ️ Not enough complete indicator data for {ticker} ({company}). Skipping strategy checks for this ticker.")
-            heatmap_data.append(heatmap_row) # Still add to heatmap data even if no signals
+            heatmap_data.append(heatmap_row)
             continue
 
         # Bullish Strategies
@@ -126,23 +127,25 @@ for ticker in TICKERS:
             signals.append((ticker, "bullish", f"📈 Bullish - RSI Oversold — {company} (RSI={df['RSI'].iloc[-1]:.1f})"))
             heatmap_row["RSI Oversold"] = 1
 
-        if "MACD Bullish Crossover" in selected_bullish:
-            if len(df) >= 2 and \
-               df['MACD'].iloc[-2] < df['MACD_Signal'].iloc[-2] and \
-               df['MACD'].iloc[-1] > df['MACD_Signal'].iloc[-1]:
-                signals.append((ticker, "bullish", f"📈 Bullish - MACD Bullish Crossover — {company}"))
-                heatmap_row["MACD Bullish Crossover"] = 1
+        # MACD Bullish Crossover Condition (re-used for confirmation)
+        macd_bullish_crossover = (df['MACD'].iloc[-2] < df['MACD_Signal'].iloc[-2] and \
+                                  df['MACD'].iloc[-1] > df['MACD_Signal'].iloc[-1])
+        if "MACD Bullish Crossover" in selected_bullish and macd_bullish_crossover:
+            signals.append((ticker, "bullish", f"📈 Bullish - MACD Bullish Crossover — {company}"))
+            heatmap_row["MACD Bullish Crossover"] = 1
         
-        # Golden Cross Strategy
-        if "Golden Cross" in selected_bullish:
-            if len(df) >= 2 and \
-               pd.notna(df['50_MA'].iloc[-2]) and pd.notna(df['200_MA'].iloc[-2]) and \
-               pd.notna(df['50_MA'].iloc[-1]) and pd.notna(df['200_MA'].iloc[-1]):
-                
-                if (df['50_MA'].iloc[-2] < df['200_MA'].iloc[-2]) and \
-                   (df['50_MA'].iloc[-1] > df['200_MA'].iloc[-1]):
-                    signals.append((ticker, "bullish", f"✨ Bullish - Golden Cross — {company}"))
-                    heatmap_row["Golden Cross"] = 1
+        # Golden Cross Condition (re-used for confirmation)
+        golden_cross = (df['50_MA'].iloc[-2] < df['200_MA'].iloc[-2]) and \
+                       (df['50_MA'].iloc[-1] > df['200_MA'].iloc[-1])
+        if "Golden Cross" in selected_bullish and golden_cross:
+            signals.append((ticker, "bullish", f"✨ Bullish - Golden Cross — {company}"))
+            heatmap_row["Golden Cross"] = 1
+
+        # --- New Bullish Confirmation Strategy ---
+        if "Trend + MACD Bullish" in selected_bullish:
+            if (df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1]) and macd_bullish_crossover:
+                signals.append((ticker, "bullish", f"✨ Bullish - Trend + MACD Confirmed — {company}"))
+                heatmap_row["Trend + MACD Bullish"] = 1
 
 
         # Bearish Strategies
@@ -150,23 +153,25 @@ for ticker in TICKERS:
             signals.append((ticker, "bearish", f"📉 Bearish - RSI Overbought — {company} (RSI={df['RSI'].iloc[-1]:.1f})"))
             heatmap_row["RSI Overbought"] = 1
 
-        if "MACD Bearish Crossover" in selected_bearish:
-            if len(df) >= 2 and \
-               df['MACD'].iloc[-2] > df['MACD_Signal'].iloc[-2] and \
-               df['MACD'].iloc[-1] < df['MACD_Signal'].iloc[-1]:
-                signals.append((ticker, "bearish", f"📉 Bearish - MACD Bearish Crossover — {company}"))
-                heatmap_row["MACD Bearish Crossover"] = 1
+        # MACD Bearish Crossover Condition (re-used for confirmation)
+        macd_bearish_crossover = (df['MACD'].iloc[-2] > df['MACD_Signal'].iloc[-2] and \
+                                  df['MACD'].iloc[-1] < df['MACD_Signal'].iloc[-1])
+        if "MACD Bearish Crossover" in selected_bearish and macd_bearish_crossover:
+            signals.append((ticker, "bearish", f"📉 Bearish - MACD Bearish Crossover — {company}"))
+            heatmap_row["MACD Bearish Crossover"] = 1
         
-        # Death Cross Strategy
-        if "Death Cross" in selected_bearish:
-            if len(df) >= 2 and \
-               pd.notna(df['50_MA'].iloc[-2]) and pd.notna(df['200_MA'].iloc[-2]) and \
-               pd.notna(df['50_MA'].iloc[-1]) and pd.notna(df['200_MA'].iloc[-1]):
-                
-                if (df['50_MA'].iloc[-2] > df['200_MA'].iloc[-2]) and \
-                   (df['50_MA'].iloc[-1] < df['200_MA'].iloc[-1]):
-                    signals.append((ticker, "bearish", f"💀 Bearish - Death Cross — {company}"))
-                    heatmap_row["Death Cross"] = 1
+        # Death Cross Condition (re-used for confirmation)
+        death_cross = (df['50_MA'].iloc[-2] > df['200_MA'].iloc[-2]) and \
+                      (df['50_MA'].iloc[-1] < df['200_MA'].iloc[-1])
+        if "Death Cross" in selected_bearish and death_cross:
+            signals.append((ticker, "bearish", f"💀 Bearish - Death Cross — {company}"))
+            heatmap_row["Death Cross"] = 1
+        
+        # --- New Bearish Confirmation Strategy ---
+        if "Death Cross + RSI Bearish" in selected_bearish:
+            if death_cross and (df['RSI'].iloc[-1] > 70):
+                signals.append((ticker, "bearish", f"💀 Bearish - Death Cross + RSI Confirmed — {company}"))
+                heatmap_row["Death Cross + RSI Bearish"] = 1
 
         heatmap_data.append(heatmap_row)
 
@@ -189,7 +194,6 @@ if heatmap_data:
     st.markdown("### 🧭 Strategy Signal Matrix")
 
     heatmap_df = pd.DataFrame(heatmap_data)
-    # Ensure all strategies are columns even if no signals were generated for them
     for strat in bullish_strategies + bearish_strategies:
         if strat not in heatmap_df.columns:
             heatmap_df[strat] = 0
@@ -197,6 +201,7 @@ if heatmap_data:
     heatmap_df["Bullish Total"] = heatmap_df[bullish_strategies].sum(axis=1)
     heatmap_df["Bearish Total"] = heatmap_df[bearish_strategies].sum(axis=1)
 
+    # Ensure all strategies, including new confirmation ones, are ordered correctly
     ordered_cols = ["Label"] + bullish_strategies + ["Bullish Total"] + bearish_strategies + ["Bearish Total"]
     heatmap_df = heatmap_df[ordered_cols]
 
@@ -213,21 +218,20 @@ if heatmap_data:
 
     def custom_color(val, strat):
         if val == 0:
-            return 0.0  # neutral gray
+            return 0.0
         elif strat in bullish_strategies:
-            return 1.0  # green
+            return 1.0
         elif strat in bearish_strategies:
-            return -1.0  # red
+            return -1.0
 
     matrix_scaled = matrix.copy()
     for col in matrix.columns:
         matrix_scaled[col] = matrix[col].apply(lambda v: custom_color(v, col))
 
-    # Define diverging colors: red → gray → green
     custom_colorscale = [
-        [0.0, "lightcoral"], # Corresponds to -1.0 (Bearish)
-        [0.5, "#eeeeee"],   # Corresponds to 0.0 (Neutral)
-        [1.0, "lightgreen"] # Corresponds to 1.0 (Bullish)
+        [0.0, "lightcoral"],
+        [0.5, "#eeeeee"],
+        [1.0, "lightgreen"]
     ]
 
     fig = px.imshow(
