@@ -37,8 +37,8 @@ refresh_rate = st.sidebar.slider("Refresh every N seconds", min_value=30, max_va
 st_autorefresh(interval=refresh_rate * 1000, key="autorefresh")
 
 # --- Strategy Selectors ---
-bullish_strategies = ["Trend Trading", "MACD Bullish Crossover", "RSI Oversold"]
-# Added "Death Cross" to bearish strategies
+# Added "Golden Cross" to bullish strategies
+bullish_strategies = ["Trend Trading", "MACD Bullish Crossover", "RSI Oversold", "Golden Cross"]
 bearish_strategies = ["MACD Bearish Crossover", "RSI Overbought", "Death Cross"]
 
 # Removed st.multiselect and set selected_bullish/bearish to include all strategies
@@ -54,6 +54,7 @@ st.sidebar.markdown("""
 **MACD Bullish Crossover**: MACD crosses above Signal
 **MACD Bearish Crossover**: MACD crosses below Signal
 **Death Cross**: 50MA crosses below 200MA
+**Golden Cross**: 50MA crosses above 200MA
 """)
 
 # --- Signal Detection ---
@@ -78,6 +79,7 @@ for ticker in TICKERS:
         # Ensure enough data for calculations (especially for 200-period MA)
         if len(df) < 200: # Need at least 200 periods for 200MA
             st.info(f"ℹ️ Not enough data for {ticker} ({company}) to calculate all indicators (requires 200 bars). Skipping...")
+            # Initialize heatmap_row even if not enough data for signals
             heatmap_row = {"Ticker": ticker, "Label": f"{ticker} — {company}"}
             for strat in bullish_strategies + bearish_strategies:
                 heatmap_row[strat] = 0
@@ -87,7 +89,7 @@ for ticker in TICKERS:
         # Indicators
         df['20_MA'] = df['Close'].rolling(window=20).mean()
         df['50_MA'] = df['Close'].rolling(window=50).mean()
-        df['200_MA'] = df['Close'].rolling(window=200).mean() # New: 200 MA for Death Cross
+        df['200_MA'] = df['Close'].rolling(window=200).mean() # 200 MA
 
         delta = df['Close'].diff()
         gain = delta.clip(lower=0)
@@ -132,6 +134,20 @@ for ticker in TICKERS:
                df['MACD'].iloc[-1] > df['MACD_Signal'].iloc[-1]:
                 signals.append((ticker, "bullish", f"📈 Bullish - MACD Bullish Crossover — {company}"))
                 heatmap_row["MACD Bullish Crossover"] = 1
+        
+        # New: Golden Cross Strategy
+        if "Golden Cross" in selected_bullish:
+            # Ensure enough data points for crossover check (at least two bars) and MAs are not NaN
+            if len(df) >= 2 and \
+               pd.notna(df['50_MA'].iloc[-2]) and pd.notna(df['200_MA'].iloc[-2]) and \
+               pd.notna(df['50_MA'].iloc[-1]) and pd.notna(df['200_MA'].iloc[-1]):
+                
+                # Check for crossover: 50MA was below 200MA, and now 50MA is above 200MA
+                if (df['50_MA'].iloc[-2] < df['200_MA'].iloc[-2]) and \
+                   (df['50_MA'].iloc[-1] > df['200_MA'].iloc[-1]):
+                    signals.append((ticker, "bullish", f"✨ Bullish - Golden Cross — {company}"))
+                    heatmap_row["Golden Cross"] = 1
+
 
         # Bearish Strategies
         if "RSI Overbought" in selected_bearish and df['RSI'].iloc[-1] > 70:
@@ -145,14 +161,12 @@ for ticker in TICKERS:
                 signals.append((ticker, "bearish", f"📉 Bearish - MACD Bearish Crossover — {company}"))
                 heatmap_row["MACD Bearish Crossover"] = 1
         
-        # New: Death Cross Strategy
+        # Death Cross Strategy
         if "Death Cross" in selected_bearish:
-            # Ensure enough data points for crossover check (at least two bars) and MAs are not NaN
             if len(df) >= 2 and \
                pd.notna(df['50_MA'].iloc[-2]) and pd.notna(df['200_MA'].iloc[-2]) and \
                pd.notna(df['50_MA'].iloc[-1]) and pd.notna(df['200_MA'].iloc[-1]):
                 
-                # Check for crossover: 50MA was above 200MA, and now 50MA is below 200MA
                 if (df['50_MA'].iloc[-2] > df['200_MA'].iloc[-2]) and \
                    (df['50_MA'].iloc[-1] < df['200_MA'].iloc[-1]):
                     signals.append((ticker, "bearish", f"💀 Bearish - Death Cross — {company}"))
@@ -187,7 +201,7 @@ if heatmap_data:
     heatmap_df["Bullish Total"] = heatmap_df[bullish_strategies].sum(axis=1)
     heatmap_df["Bearish Total"] = heatmap_df[bearish_strategies].sum(axis=1)
 
-    # Updated ordered_cols to include "Death Cross"
+    # Updated ordered_cols to include "Golden Cross"
     ordered_cols = ["Label"] + bullish_strategies + ["Bullish Total"] + bearish_strategies + ["Bearish Total"]
     heatmap_df = heatmap_df[ordered_cols]
 
