@@ -23,7 +23,8 @@ TICKER_NAMES = {
     "SOUN": "SoundHound AI Inc.",
     "CRSP": "CRISPR Therapeutics AG",
     "TSM": "Taiwan Semiconductor",
-    "DDOG": "Datadog Inc."
+    "DDOG": "Datadog Inc.",
+    "BTSG": "BrightSpring Health Services"
 }
 
 # --- Page Setup ---
