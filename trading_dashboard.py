@@ -112,11 +112,11 @@ for ticker in TICKERS:
 
         # Bullish Strategies
         if "Trend Trading" in selected_bullish and df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1]:
-            signals.append((ticker, f"📈 Bullish - Trend Trading — {company}"))
+            signals.append((ticker, "bullish", f"📈 Bullish - Trend Trading — {company}"))
             heatmap_row["Trend Trading"] = 1
 
         if "RSI Oversold" in selected_bullish and df['RSI'].iloc[-1] < 30:
-            signals.append((ticker, f"📈 Bullish - RSI Oversold — {company} (RSI={df['RSI'].iloc[-1]:.1f})"))
+            signals.append((ticker, "bullish", f"📈 Bullish - RSI Oversold — {company} (RSI={df['RSI'].iloc[-1]:.1f})"))
             heatmap_row["RSI Oversold"] = 1
 
         if "MACD Bullish Crossover" in selected_bullish:
@@ -124,12 +124,12 @@ for ticker in TICKERS:
             if len(df) >= 2 and \
                df['MACD'].iloc[-2] < df['MACD_Signal'].iloc[-2] and \
                df['MACD'].iloc[-1] > df['MACD_Signal'].iloc[-1]:
-                signals.append((ticker, f"📈 Bullish - MACD Bullish Crossover — {company}"))
+                signals.append((ticker, "bullish", f"📈 Bullish - MACD Bullish Crossover — {company}"))
                 heatmap_row["MACD Bullish Crossover"] = 1
 
         # Bearish Strategies
         if "RSI Overbought" in selected_bearish and df['RSI'].iloc[-1] > 70:
-            signals.append((ticker, f"📉 Bearish - RSI Overbought — {company} (RSI={df['RSI'].iloc[-1]:.1f})"))
+            signals.append((ticker, "bearish", f"📉 Bearish - RSI Overbought — {company} (RSI={df['RSI'].iloc[-1]:.1f})"))
             heatmap_row["RSI Overbought"] = 1
 
         if "MACD Bearish Crossover" in selected_bearish:
@@ -137,7 +137,7 @@ for ticker in TICKERS:
             if len(df) >= 2 and \
                df['MACD'].iloc[-2] > df['MACD_Signal'].iloc[-2] and \
                df['MACD'].iloc[-1] < df['MACD_Signal'].iloc[-1]:
-                signals.append((ticker, f"📉 Bearish - MACD Bearish Crossover — {company}"))
+                signals.append((ticker, "bearish", f"📉 Bearish - MACD Bearish Crossover — {company}"))
                 heatmap_row["MACD Bearish Crossover"] = 1
 
         heatmap_data.append(heatmap_row)
@@ -148,8 +148,11 @@ for ticker in TICKERS:
 # --- Signal Display ---
 if signals:
     st.markdown("### ✅ Current Trade Signals")
-    for _, msg in signals:
-        st.success(msg)
+    for _, signal_type, msg in signals: # Unpack the signal_type
+        if signal_type == "bullish":
+            st.success(msg)
+        elif signal_type == "bearish":
+            st.error(msg) # Use st.error for red box
 else:
     st.info("No trade signals at this time for any active strategies.")
 
