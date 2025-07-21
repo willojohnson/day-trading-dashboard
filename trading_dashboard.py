@@ -37,7 +37,6 @@ refresh_rate = st.sidebar.slider("Refresh every N seconds", min_value=30, max_va
 st_autorefresh(interval=refresh_rate * 1000, key="autorefresh")
 
 # --- Strategy Selectors ---
-# Added "Golden Cross" to bullish strategies
 bullish_strategies = ["Trend Trading", "MACD Bullish Crossover", "RSI Oversold", "Golden Cross"]
 bearish_strategies = ["MACD Bearish Crossover", "RSI Overbought", "Death Cross"]
 
@@ -47,15 +46,14 @@ selected_bearish = bearish_strategies
 
 # --- Strategy Definitions ---
 st.sidebar.markdown("### 📘 Strategy Definitions")
-st.sidebar.markdown("""
-**Trend Trading**: 20MA > 50MA
-**RSI Overbought**: RSI > 70
-**RSI Oversold**: RSI < 30
-**MACD Bullish Crossover**: MACD crosses above Signal
-**MACD Bearish Crossover**: MACD crosses below Signal
-**Death Cross**: 50MA crosses below 200MA
-**Golden Cross**: 50MA crosses above 200MA
-""")
+st.sidebar.markdown("**Trend Trading**: 20MA > 50MA")
+st.sidebar.markdown("**RSI Overbought**: RSI > 70")
+st.sidebar.markdown("**RSI Oversold**: RSI < 30")
+st.sidebar.markdown("**MACD Bullish Crossover**: MACD crosses above Signal")
+st.sidebar.markdown("**MACD Bearish Crossover**: MACD crosses below Signal")
+st.sidebar.markdown("**Death Cross**: 50MA crosses below 200MA")
+st.sidebar.markdown("**Golden Cross**: 50MA crosses above 200MA")
+
 
 # --- Signal Detection ---
 now = datetime.datetime.now()
@@ -135,14 +133,12 @@ for ticker in TICKERS:
                 signals.append((ticker, "bullish", f"📈 Bullish - MACD Bullish Crossover — {company}"))
                 heatmap_row["MACD Bullish Crossover"] = 1
         
-        # New: Golden Cross Strategy
+        # Golden Cross Strategy
         if "Golden Cross" in selected_bullish:
-            # Ensure enough data points for crossover check (at least two bars) and MAs are not NaN
             if len(df) >= 2 and \
                pd.notna(df['50_MA'].iloc[-2]) and pd.notna(df['200_MA'].iloc[-2]) and \
                pd.notna(df['50_MA'].iloc[-1]) and pd.notna(df['200_MA'].iloc[-1]):
                 
-                # Check for crossover: 50MA was below 200MA, and now 50MA is above 200MA
                 if (df['50_MA'].iloc[-2] < df['200_MA'].iloc[-2]) and \
                    (df['50_MA'].iloc[-1] > df['200_MA'].iloc[-1]):
                     signals.append((ticker, "bullish", f"✨ Bullish - Golden Cross — {company}"))
@@ -201,7 +197,6 @@ if heatmap_data:
     heatmap_df["Bullish Total"] = heatmap_df[bullish_strategies].sum(axis=1)
     heatmap_df["Bearish Total"] = heatmap_df[bearish_strategies].sum(axis=1)
 
-    # Updated ordered_cols to include "Golden Cross"
     ordered_cols = ["Label"] + bullish_strategies + ["Bullish Total"] + bearish_strategies + ["Bearish Total"]
     heatmap_df = heatmap_df[ordered_cols]
 
