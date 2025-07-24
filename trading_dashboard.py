@@ -4,8 +4,6 @@ import pandas as pd
 import datetime
 from streamlit_autorefresh import st_autorefresh
 import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 # --- Tickers to Monitor ---
 TICKERS = ["NVDA", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP", "TSM", "DDOG", "BTSG"]
@@ -59,7 +57,7 @@ st.sidebar.markdown("**Trend + MACD Bullish**: 20MA > 50MA AND MACD Bullish Cros
 st.sidebar.markdown("**Death Cross + RSI Bearish**: 50MA < 200MA AND RSI > 70")
 
 
-# --- Signal Detection (Existing Logic) ---
+# --- Signal Detection ---
 now = datetime.datetime.now()
 start = now - datetime.timedelta(days=60) # Max for 5m interval is typically 60 days.
 end = now
@@ -81,16 +79,19 @@ for ticker in TICKERS:
         if len(df) < 200: # Need at least 200 periods for 200MA
             st.info(f"ℹ️ Not enough data for {ticker} ({company}) to calculate all indicators (requires 200 bars). Skipping...")
             heatmap_row = {"Ticker": ticker, "Label": f"{ticker} — {company}"}
+            # Initialize with empty string for no signal
             for strat in bullish_strategies + bearish_strategies:
-                heatmap_row[strat] = "" # Initialize with empty string for no signal
+                heatmap_row[strat] = ""
             heatmap_data.append(heatmap_row)
             continue
         
+        # Ensure at least 2 bars for any crossover logic that looks at iloc[-2]
         if len(df) < 2:
             st.info(f"ℹ️ Not enough data for {ticker} ({company}) for crossover analysis (requires at least 2 bars). Skipping strategy checks.")
             heatmap_row = {"Ticker": ticker, "Label": f"{ticker} — {company}"}
+            # Initialize with empty string for no signal
             for strat in bullish_strategies + bearish_strategies:
-                heatmap_row[strat] = "" # Initialize with empty string for no signal
+                heatmap_row[strat] = ""
             heatmap_data.append(heatmap_row)
             continue
 
@@ -116,8 +117,9 @@ for ticker in TICKERS:
 
         # Signal Matrix Row Initialization
         heatmap_row = {"Ticker": ticker, "Label": f"{ticker} — {company}"}
+        # Initialize with empty string for no signal
         for strat in bullish_strategies + bearish_strategies:
-            heatmap_row[strat] = "" # Initialize with empty string for no signal
+            heatmap_row[strat] = ""
 
         # --- CRUCIAL: Extract scalar values using .item() and handle NaNs ---
         def get_scalar_value(series_or_scalar):
@@ -245,138 +247,7 @@ for ticker in TICKERS:
         print(f"DEBUG: Unhandled error for {ticker}: {e}") # This will print to your terminal
 
 
-# --- Add a Ticker Selector for Charting ---
-st.markdown("---") # Separator for clarity
-st.subheader("📊 Individual Stock Chart Analysis")
-selected_chart_ticker = st.selectbox("Select Ticker for Detailed Chart", TICKERS, key="chart_ticker_select")
-
-# Function to generate and display the chart
-def plot_stock_chart(ticker_symbol, company_name):
-    st.write(f"Displaying chart for **{ticker_symbol}** ({company_name})")
-
-    # Fetch data for charting - longer period might be desired for visual trends
-    # yfinance 5m interval is typically limited to 60 days
-    chart_start_date = datetime.datetime.now() - datetime.timedelta(days=60) # Keep 60 days for 5m interval
-    chart_end_date = datetime.datetime.now()
-
-    try:
-        chart_df = yf.download(ticker_symbol, start=chart_start_date, end=chart_end_date, interval="5m")
-
-        if chart_df.empty or 'Close' not in chart_df.columns:
-            st.warning(f"⚠️ No valid chart data available for {ticker_symbol} ({company_name}) for the selected period/interval.")
-            return
-
-        # Calculate indicators for charting (same as signal calculation, but for the chart_df)
-        chart_df['20_MA'] = chart_df['Close'].rolling(window=20).mean()
-        chart_df['50_MA'] = chart_df['Close'].rolling(window=50).mean()
-        chart_df['200_MA'] = chart_df['Close'].rolling(window=200).mean()
-
-        delta = chart_df['Close'].diff()
-        gain = delta.clip(lower=0)
-        loss = -delta.clip(upper=0)
-        avg_gain = gain.ewm(com=13, adjust=False).mean()
-        avg_loss = loss.ewm(com=13, adjust=False).mean()
-        rs = avg_gain / avg_loss.replace(0, 1e-9)
-        chart_df['RSI'] = 100 - (100 / (1 + rs))
-
-        exp1 = chart_df['Close'].ewm(span=12, adjust=False).mean()
-        exp2 = chart_df['Close'].ewm(span=26, adjust=False).mean()
-        chart_df['MACD'] = exp1 - exp2
-        chart_df['MACD_Signal'] = chart_df['MACD'].ewm(span=9, adjust=False).mean()
-        chart_df['MACD_Hist'] = chart_df['MACD'] - chart_df['MACD_Signal']
-
-
-        # Create subplots: Price, MACD, RSI, Volume
-        fig = make_subplots(
-            rows=4, cols=1,
-            shared_xaxes=True,
-            vertical_spacing=0.08,
-            row_heights=[0.5, 0.15, 0.15, 0.2] # Proportions for each subplot height
-        )
-
-        # --- 1. Candlestick chart + Moving Averages ---
-        fig.add_trace(go.Candlestick(
-            x=chart_df.index,
-            open=chart_df['Open'],
-            high=chart_df['High'],
-            low=chart_df['Low'],
-            close=chart_df['Close'],
-            name='Candlestick',
-            increasing_line_color='green', increasing_fillcolor='green',
-            decreasing_line_color='red', decreasing_fillcolor='red'
-        ), row=1, col=1)
-
-        # Moving Averages - Check if the series contains any valid (non-NaN) data before plotting
-        if not chart_df['20_MA'].empty and chart_df['20_MA'].dropna().any():
-            fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['20_MA'], line=dict(color='orange', width=1), name='20 MA', legendgroup='MA'), row=1, col=1)
-        if not chart_df['50_MA'].empty and chart_df['50_MA'].dropna().any():
-            fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['50_MA'], line=dict(color='blue', width=1), name='50 MA', legendgroup='MA'), row=1, col=1)
-        
-        # --- REVISED 200 MA ADDITION LOGIC (Most likely fix for your issue) ---
-        # Check if the 200_MA Series is not empty AND contains at least one non-NaN value.
-        if not chart_df['200_MA'].empty and chart_df['200_MA'].dropna().any():
-            fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['200_MA'], line=dict(color='purple', width=1), name='200 MA', legendgroup='MA'), row=1, col=1)
-
-
-        # --- 2. MACD Subplot ---
-        if not chart_df['MACD'].empty and chart_df['MACD'].dropna().any():
-            fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['MACD'], line=dict(color='green', width=1), name='MACD Line', legendgroup='MACD'), row=2, col=1)
-        if not chart_df['MACD_Signal'].empty and chart_df['MACD_Signal'].dropna().any():
-            fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['MACD_Signal'], line=dict(color='red', width=1), name='Signal Line', legendgroup='MACD'), row=2, col=1)
-        # MACD Histogram
-        if not chart_df['MACD_Hist'].empty and chart_df['MACD_Hist'].dropna().any():
-            macd_histogram_colors = ['rgba(0,128,0,0.7)' if val >= 0 else 'rgba(255,0,0,0.7)' for val in chart_df['MACD_Hist']]
-            fig.add_trace(go.Bar(x=chart_df.index, y=chart_df['MACD_Hist'], name='MACD Hist', marker_color=macd_histogram_colors, legendgroup='MACD'), row=2, col=1)
-
-
-        # --- 3. RSI Subplot ---
-        if not chart_df['RSI'].empty and chart_df['RSI'].dropna().any():
-            fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['RSI'], line=dict(color='darkorange', width=1.5), name='RSI', legendgroup='RSI'), row=3, col=1)
-            # RSI Overbought/Oversold lines (always add if RSI itself is plotted)
-            fig.add_trace(go.Scatter(x=chart_df.index, y=[70] * len(chart_df), line=dict(color='grey', width=1, dash='dash'), name='RSI Overbought', legendgroup='RSI'), row=3, col=1)
-            fig.add_trace(go.Scatter(x=chart_df.index, y=[30] * len(chart_df), line=dict(color='grey', width=1, dash='dash'), name='RSI Oversold', legendgroup='RSI'), row=3, col=1)
-
-
-        # --- 4. Volume Subplot ---
-        if not chart_df['Volume'].empty and chart_df['Volume'].dropna().any():
-            volume_colors = ['rgba(0,128,0,0.5)' if chart_df['Close'].iloc[i] > chart_df['Open'].iloc[i] else 'rgba(255,0,0,0.5)' for i in range(len(chart_df))]
-            fig.add_trace(go.Bar(x=chart_df.index, y=chart_df['Volume'], name='Volume', marker_color=volume_colors, legendgroup='Volume'), row=4, col=1)
-
-
-        # --- Update Layout and Axes ---
-        fig.update_layout(
-            title=f'{ticker_symbol} ({company_name}) Interactive Chart (5-Minute Interval)',
-            xaxis_rangeslider_visible=False,
-            height=900,
-            template="plotly_dark",
-            hovermode="x unified",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-        )
-
-        # Update Y-axis titles
-        fig.update_yaxes(title_text="Price", row=1, col=1)
-        fig.update_yaxes(title_text="MACD", row=2, col=1)
-        fig.update_yaxes(title_text="RSI", range=[0, 100], row=3, col=1)
-        fig.update_yaxes(title_text="Volume", row=4, col=1)
-
-        # Remove whitespace between subplots and adjust margins
-        fig.update_layout(margin=dict(t=50, b=20, l=20, r=20),
-                          xaxis=dict(gridcolor='rgba(255,255,255,0.1)'),
-                          yaxis=dict(gridcolor='rgba(255,255,255,0.1)'))
-
-
-        st.plotly_chart(fig, use_container_width=True)
-
-    except Exception as e:
-        st.error(f"❌ Error generating chart for {ticker_symbol} ({company_name}): {e}")
-        print(f"DEBUG: Chart generation error for {ticker_symbol}: {e}")
-
-# Call the function for the selected ticker
-if selected_chart_ticker:
-    plot_stock_chart(selected_chart_ticker, TICKER_NAMES.get(selected_chart_ticker, selected_chart_ticker))
-
-
-# --- Signal Display (Existing Logic) ---
+# --- Signal Display ---
 if signals:
     st.markdown("### ✅ Current Trade Signals")
     for _, signal_type, msg in signals:
@@ -387,69 +258,85 @@ if signals:
 else:
     st.info("No trade signals at this time for any active strategies.")
 
-# --- Heatmap Matrix + Visual (Existing Logic) ---
+# --- Heatmap Matrix + Visual ---
 if heatmap_data:
     st.markdown("### 🧭 Strategy Signal Matrix")
 
     heatmap_df = pd.DataFrame(heatmap_data)
+    # Ensure all strategies, including new confirmation ones, are initialized with empty strings
     for strat in bullish_strategies + bearish_strategies:
         if strat not in heatmap_df.columns:
-            heatmap_df[strat] = "" # Initialize with empty string
+            heatmap_df[strat] = ""
 
+    # Summing for totals needs to convert strings back to numbers (0 or 1)
     def to_numeric_signal(val):
         return 1 if val != "" else 0
 
+    # Apply conversion to a temporary DataFrame for summing
     numeric_heatmap_df = heatmap_df[bullish_strategies + bearish_strategies].applymap(to_numeric_signal)
     heatmap_df["Bullish Total"] = numeric_heatmap_df[bullish_strategies].sum(axis=1)
     heatmap_df["Bearish Total"] = numeric_heatmap_df[bearish_strategies].sum(axis=1)
 
+
     ordered_cols = ["Label"] + bullish_strategies + ["Bullish Total"] + bearish_strategies + ["Bearish Total"]
     heatmap_df = heatmap_df[ordered_cols]
 
+    # --- CUSTOM STYLING FOR BEARISH TOTAL ---
     def highlight_bearish_total(val):
+        """Highlights the 'Bearish Total' cell red if value is 1 or more, otherwise no color."""
         if val >= 1:
             return 'background-color: salmon'
-        return ''
+        return '' # No background color
 
     st.dataframe(
         heatmap_df.style
         .highlight_max(axis=0, subset=["Bullish Total"], color="lightgreen")
-        .applymap(highlight_bearish_total, subset=['Bearish Total'])
+        .applymap(highlight_bearish_total, subset=['Bearish Total']) # Apply custom styling
     )
 
+    # --- Combined Heatmap Visualization ---
     st.markdown("### 🔥 Strategy Activation Heatmap")
 
+    # The matrix should contain the strings for display
     matrix = heatmap_df.set_index("Label")[bullish_strategies + bearish_strategies]
 
     def custom_color_from_string(val, strat):
+        # If the value is an empty string, it means no signal, map to neutral color
         if val == "":
             return 0.5 
         
+        # If there's a value (string), it indicates a signal. Assign color based on strategy type.
         if strat in bullish_strategies: 
-            return 1.0 
+            return 1.0 # Maps to green for bullish
         elif strat in bearish_strategies: 
-            return 0.0 
+            return 0.0 # Maps to red for bearish (using 0.0 on the scale to represent red)
         
-        return 0.5 
+        return 0.5 # Fallback for any unhandled case (shouldn't be reached with current logic)
 
+
+    # Apply the custom coloring logic to generate a numeric matrix for the colorscale
     matrix_for_colors = matrix.copy()
     for col in matrix_for_colors.columns:
         matrix_for_colors[col] = matrix_for_colors[col].apply(lambda v: custom_color_from_string(v, col))
 
+    # Define the colorscale
     custom_colorscale = [
-        [0.0, "lightcoral"],
-        [0.5, "#eeeeee"],
-        [1.0, "lightgreen"]
+        [0.0, "lightcoral"], # Corresponds to bearish signals (value 0.0 in matrix_for_colors)
+        [0.5, "#eeeeee"],   # Corresponds to no signal (value 0.5 in matrix_for_colors)
+        [1.0, "lightgreen"] # Corresponds to bullish signals (value 1.0 in matrix_for_colors)
     ]
 
     fig = px.imshow(
-        matrix_for_colors,
+        matrix_for_colors, # Use the numeric matrix for colors
         color_continuous_scale=custom_colorscale,
-        text_auto=True,
+        text_auto=True,    # This will display the actual string values from the 'matrix' DataFrame
         aspect="auto"
     )
     
-    fig.update_traces(text=matrix.values, texttemplate="%{text}")
+    # To display the correct text (e.g., "26.90" or "✔"), we need to use the original string matrix as the text source.
+    # px.imshow by default uses the same matrix for both color and text.
+    # We can override the text:
+    fig.update_traces(text=matrix.values, texttemplate="%{text}") # Use the original string matrix for text
 
     fig.update_layout(margin=dict(t=30, b=30, l=30, r=30))
     st.plotly_chart(fig, use_container_width=True)
