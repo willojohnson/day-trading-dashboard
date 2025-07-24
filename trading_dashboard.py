@@ -79,8 +79,9 @@ for ticker in TICKERS:
         if len(df) < 200: # Need at least 200 periods for 200MA
             st.info(f"ℹ️ Not enough data for {ticker} ({company}) to calculate all indicators (requires 200 bars). Skipping...")
             heatmap_row = {"Ticker": ticker, "Label": f"{ticker} — {company}"}
+            # Initialize with empty string for no signal
             for strat in bullish_strategies + bearish_strategies:
-                heatmap_row[strat] = 0
+                heatmap_row[strat] = ""
             heatmap_data.append(heatmap_row)
             continue
         
@@ -88,8 +89,9 @@ for ticker in TICKERS:
         if len(df) < 2:
             st.info(f"ℹ️ Not enough data for {ticker} ({company}) for crossover analysis (requires at least 2 bars). Skipping strategy checks.")
             heatmap_row = {"Ticker": ticker, "Label": f"{ticker} — {company}"}
+            # Initialize with empty string for no signal
             for strat in bullish_strategies + bearish_strategies:
-                heatmap_row[strat] = 0
+                heatmap_row[strat] = ""
             heatmap_data.append(heatmap_row)
             continue
 
@@ -115,8 +117,9 @@ for ticker in TICKERS:
 
         # Signal Matrix Row Initialization
         heatmap_row = {"Ticker": ticker, "Label": f"{ticker} — {company}"}
+        # Initialize with empty string for no signal
         for strat in bullish_strategies + bearish_strategies:
-            heatmap_row[strat] = 0
+            heatmap_row[strat] = ""
 
         # --- CRUCIAL: Extract scalar values using .item() and handle NaNs ---
         def get_scalar_value(series_or_scalar):
@@ -197,45 +200,45 @@ for ticker in TICKERS:
         # Bullish Strategies
         if "Trend Trading" in selected_bullish and ma20_1 > ma50_1:
             signals.append((ticker, "bullish", f"📈 Bullish - Trend Trading — {company}"))
-            heatmap_row["Trend Trading"] = 1
+            heatmap_row["Trend Trading"] = "✔" # Checkmark for signal
 
         if "RSI Oversold" in selected_bullish and rsi_1 < 30:
             signals.append((ticker, "bullish", f"📈 Bullish - RSI Oversold — {company} (RSI={rsi_1:.1f})"))
-            heatmap_row["RSI Oversold"] = round(rsi_1, 1) # Store the actual RSI value
+            heatmap_row["RSI Oversold"] = f"{rsi_1:.2f}" # Store exact RSI value
 
         if "MACD Bullish Crossover" in selected_bullish and macd_bullish_crossover:
             signals.append((ticker, "bullish", f"📈 Bullish - MACD Bullish Crossover — {company}"))
-            heatmap_row["MACD Bullish Crossover"] = 1
+            heatmap_row["MACD Bullish Crossover"] = "✔" # Checkmark for signal
         
         if "Golden Cross" in selected_bullish and golden_cross:
             signals.append((ticker, "bullish", f"✨ Bullish - Golden Cross — {company}"))
-            heatmap_row["Golden Cross"] = 1
+            heatmap_row["Golden Cross"] = "✔" # Checkmark for signal
 
         # --- New Bullish Confirmation Strategy ---
         if "Trend + MACD Bullish" in selected_bullish:
             if (ma20_1 > ma50_1) and macd_bullish_crossover:
                 signals.append((ticker, "bullish", f"✨ Bullish - Trend + MACD Confirmed — {company}"))
-                heatmap_row["Trend + MACD Bullish"] = 1
+                heatmap_row["Trend + MACD Bullish"] = "✔" # Checkmark for signal
 
 
         # Bearish Strategies
         if "RSI Overbought" in selected_bearish and rsi_1 > 70:
             signals.append((ticker, "bearish", f"📉 Bearish - RSI Overbought — {company} (RSI={rsi_1:.1f})"))
-            heatmap_row["RSI Overbought"] = round(rsi_1, 1) # Store the actual RSI value
+            heatmap_row["RSI Overbought"] = f"{rsi_1:.2f}" # Store exact RSI value
 
         if "MACD Bearish Crossover" in selected_bearish and macd_bearish_crossover:
             signals.append((ticker, "bearish", f"📉 Bearish - MACD Bearish Crossover — {company}"))
-            heatmap_row["MACD Bearish Crossover"] = 1
+            heatmap_row["MACD Bearish Crossover"] = "✔" # Checkmark for signal
         
         if "Death Cross" in selected_bearish and death_cross:
             signals.append((ticker, "bearish", f"💀 Bearish - Death Cross — {company}"))
-            heatmap_row["Death Cross"] = 1
+            heatmap_row["Death Cross"] = "✔" # Checkmark for signal
         
         # --- New Bearish Confirmation Strategy ---
         if "Death Cross + RSI Bearish" in selected_bearish:
             if death_cross and (rsi_1 > 70):
                 signals.append((ticker, "bearish", f"💀 Bearish - Death Cross + RSI Confirmed — {company}"))
-                heatmap_row["Death Cross + RSI Bearish"] = 1
+                heatmap_row["Death Cross + RSI Bearish"] = "✔" # Checkmark for signal
 
         heatmap_data.append(heatmap_row)
 
@@ -260,12 +263,20 @@ if heatmap_data:
     st.markdown("### 🧭 Strategy Signal Matrix")
 
     heatmap_df = pd.DataFrame(heatmap_data)
+    # Ensure all strategies, including new confirmation ones, are initialized with empty strings
     for strat in bullish_strategies + bearish_strategies:
         if strat not in heatmap_df.columns:
-            heatmap_df[strat] = 0
+            heatmap_df[strat] = ""
 
-    heatmap_df["Bullish Total"] = heatmap_df[bullish_strategies].sum(axis=1)
-    heatmap_df["Bearish Total"] = heatmap_df[bearish_strategies].sum(axis=1)
+    # Summing for totals needs to convert strings back to numbers (0 or 1)
+    def to_numeric_signal(val):
+        return 1 if val != "" else 0
+
+    # Apply conversion to a temporary DataFrame for summing
+    numeric_heatmap_df = heatmap_df[bullish_strategies + bearish_strategies].applymap(to_numeric_signal)
+    heatmap_df["Bullish Total"] = numeric_heatmap_df[bullish_strategies].sum(axis=1)
+    heatmap_df["Bearish Total"] = numeric_heatmap_df[bearish_strategies].sum(axis=1)
+
 
     ordered_cols = ["Label"] + bullish_strategies + ["Bullish Total"] + bearish_strategies + ["Bearish Total"]
     heatmap_df = heatmap_df[ordered_cols]
@@ -286,44 +297,46 @@ if heatmap_data:
     # --- Combined Heatmap Visualization ---
     st.markdown("### 🔥 Strategy Activation Heatmap")
 
+    # The matrix should contain the strings for display
     matrix = heatmap_df.set_index("Label")[bullish_strategies + bearish_strategies]
 
-    def custom_color(val, strat):
-        # If the value is 0, it means no signal for this strategy, map to neutral color
-        if val == 0:
-            return 0.0 
+    def custom_color_from_string(val, strat):
+        # If the value is an empty string, it means no signal, map to neutral color
+        if val == "":
+            return 0.5 
         
-        # For RSI strategies, if a non-zero value is present, it means a signal.
-        # We still want a binary color (green for oversold, red for overbought).
-        if strat == "RSI Oversold":
-            return 1.0 # Maps to green in the colorscale
-        elif strat == "RSI Overbought":
-            return -1.0 # Maps to red in the colorscale
-        
-        # For other strategies that still use 0 or 1
-        elif strat in bullish_strategies: 
-            return 1.0 # Maps to green
+        # If there's a value (string), it indicates a signal. Assign color based on strategy type.
+        if strat in bullish_strategies: 
+            return 1.0 # Maps to green for bullish
         elif strat in bearish_strategies: 
-            return -1.0 # Maps to red
+            return 0.0 # Maps to red for bearish (using 0.0 on the scale to represent red)
         
-        return 0.0 # Fallback for any unhandled case (shouldn't be reached with current logic)
+        return 0.5 # Fallback for any unhandled case (shouldn't be reached with current logic)
 
 
-    matrix_scaled = matrix.copy()
-    for col in matrix.columns:
-        matrix_scaled[col] = matrix[col].apply(lambda v: custom_color(v, col))
+    # Apply the custom coloring logic to generate a numeric matrix for the colorscale
+    matrix_for_colors = matrix.copy()
+    for col in matrix_for_colors.columns:
+        matrix_for_colors[col] = matrix_for_colors[col].apply(lambda v: custom_color_from_string(v, col))
 
+    # Define the colorscale
     custom_colorscale = [
-        [0.0, "lightcoral"], # Corresponds to -1.0 for bearish signals
-        [0.5, "#eeeeee"],   # Corresponds to 0.0 for no signal
-        [1.0, "lightgreen"] # Corresponds to 1.0 for bullish signals
+        [0.0, "lightcoral"], # Corresponds to bearish signals (value 0.0 in matrix_for_colors)
+        [0.5, "#eeeeee"],   # Corresponds to no signal (value 0.5 in matrix_for_colors)
+        [1.0, "lightgreen"] # Corresponds to bullish signals (value 1.0 in matrix_for_colors)
     ]
 
     fig = px.imshow(
-        matrix_scaled,
+        matrix_for_colors, # Use the numeric matrix for colors
         color_continuous_scale=custom_colorscale,
-        text_auto=True, # This will display the RSI number for RSI cells, or 1/0 for others
+        text_auto=True,    # This will display the actual string values from the 'matrix' DataFrame
         aspect="auto"
     )
+    
+    # To display the correct text (e.g., "26.90" or "✔"), we need to use the original string matrix as the text source.
+    # px.imshow by default uses the same matrix for both color and text.
+    # We can override the text:
+    fig.update_traces(text=matrix.values, texttemplate="%{text}") # Use the original string matrix for text
+
     fig.update_layout(margin=dict(t=30, b=30, l=30, r=30))
     st.plotly_chart(fig, use_container_width=True)
