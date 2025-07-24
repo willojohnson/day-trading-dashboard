@@ -37,8 +37,8 @@ refresh_rate = st.sidebar.slider("Refresh every N seconds", min_value=30, max_va
 st_autorefresh(interval=refresh_rate * 1000, key="autorefresh")
 
 # --- Strategy Selectors ---
-bullish_strategies = ["Trend Trading", "MACD Bullish Crossover", "RSI Oversold", "Golden Cross", "Trend + MACD Bullish"] # Added Confirmation Strategy
-bearish_strategies = ["MACD Bearish Crossover", "RSI Overbought", "Death Cross", "Death Cross + RSI Bearish"] # Added Confirmation Strategy
+bullish_strategies = ["Trend Trading", "MACD Bullish Crossover", "RSI Oversold", "Golden Cross", "Trend + MACD Bullish"]
+bearish_strategies = ["MACD Bearish Crossover", "RSI Overbought", "Death Cross", "Death Cross + RSI Bearish"]
 
 selected_bullish = bullish_strategies
 selected_bearish = bearish_strategies
@@ -52,9 +52,9 @@ st.sidebar.markdown("**MACD Bullish Crossover**: MACD crosses above Signal")
 st.sidebar.markdown("**MACD Bearish Crossover**: MACD crosses below Signal")
 st.sidebar.markdown("**Death Cross**: 50MA crosses below 200MA")
 st.sidebar.markdown("**Golden Cross**: 50MA crosses above 200MA")
-st.sidebar.markdown("---") # Separator for clarity
-st.sidebar.markdown("**Trend + MACD Bullish**: 20MA > 50MA AND MACD Bullish Crossover") # New Confirmation
-st.sidebar.markdown("**Death Cross + RSI Bearish**: 50MA < 200MA AND RSI > 70") # New Confirmation
+st.sidebar.markdown("---")
+st.sidebar.markdown("**Trend + MACD Bullish**: 20MA > 50MA AND MACD Bullish Crossover")
+st.sidebar.markdown("**Death Cross + RSI Bearish**: 50MA < 200MA AND RSI > 70")
 
 
 # --- Signal Detection ---
@@ -71,6 +71,7 @@ for ticker in TICKERS:
     company = TICKER_NAMES.get(ticker, ticker)
     try:
         df = yf.download(ticker, start=start, end=end, interval="5m")
+
         if df.empty or 'Close' not in df.columns:
             st.warning(f"⚠️ No valid data for {ticker} ({company}). Skipping...")
             continue
@@ -82,8 +83,18 @@ for ticker in TICKERS:
                 heatmap_row[strat] = 0
             heatmap_data.append(heatmap_row)
             continue
+        
+        # Ensure at least 2 bars for any crossover logic that looks at iloc[-2]
+        if len(df) < 2:
+            st.info(f"ℹ️ Not enough data for {ticker} ({company}) for crossover analysis (requires at least 2 bars). Skipping strategy checks.")
+            heatmap_row = {"Ticker": ticker, "Label": f"{ticker} — {company}"}
+            for strat in bullish_strategies + bearish_strategies:
+                heatmap_row[strat] = 0
+            heatmap_data.append(heatmap_row)
+            continue
 
-        # Indicators
+
+        # --- Indicator Calculations ---
         df['20_MA'] = df['Close'].rolling(window=20).mean()
         df['50_MA'] = df['Close'].rolling(window=50).mean()
         df['200_MA'] = df['Close'].rolling(window=200).mean()
@@ -101,75 +112,128 @@ for ticker in TICKERS:
         df['MACD'] = exp1 - exp2
         df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
 
+
         # Signal Matrix Row Initialization
         heatmap_row = {"Ticker": ticker, "Label": f"{ticker} — {company}"}
         for strat in bullish_strategies + bearish_strategies:
             heatmap_row[strat] = 0
 
-        # Check for NaN values at the end of the dataframe for indicators
-        # Ensure we have at least 2 bars for MACD/MA crossovers
-        if len(df) < 2 or \
-           pd.isna(df['20_MA'].iloc[-1]) or pd.isna(df['50_MA'].iloc[-1]) or \
-           pd.isna(df['200_MA'].iloc[-1]) or pd.isna(df['RSI'].iloc[-1]) or \
-           pd.isna(df['MACD'].iloc[-1]) or pd.isna(df['MACD_Signal'].iloc[-1]) or \
-           pd.isna(df['MACD'].iloc[-2]) or pd.isna(df['MACD_Signal'].iloc[-2]) or \
-           pd.isna(df['50_MA'].iloc[-2]) or pd.isna(df['200_MA'].iloc[-2]):
-            st.info(f"ℹ️ Not enough complete indicator data for {ticker} ({company}). Skipping strategy checks for this ticker.")
+        # --- CRUCIAL: Extract scalar values using .item() and handle NaNs ---
+        def get_scalar_value(series_or_scalar):
+            if pd.isna(series_or_scalar):
+                return None
+            try:
+                # Attempt to get the scalar value using .item()
+                return series_or_scalar.item()
+            except AttributeError:
+                # If it doesn't have .item(), it might already be a scalar (int, float, etc.)
+                # We need to ensure it's a true scalar.
+                if isinstance(series_or_scalar, (int, float, bool)):
+                    return series_or_scalar
+                # If it's not a basic scalar type and has no .item(), it's problematic
+                # Treat as None, as it's not a clean scalar for comparisons.
+                return None
+            except Exception as e:
+                # Catch any other unexpected errors during item extraction
+                print(f"DEBUG: Failed to extract scalar for {type(series_or_scalar)} (value: {series_or_scalar}). Error: {e}")
+                return None
+
+        # Initialize all variables to None
+        ma20_1, ma50_1, ma200_1, rsi_1, macd_1, macd_signal_1 = [None] * 6
+        ma50_2, ma200_2, macd_2, macd_signal_2 = [None] * 4
+
+        try:
+            # Current values (iloc[-1])
+            if not df.empty and len(df) >= 1:
+                ma20_1 = get_scalar_value(df['20_MA'].iloc[-1])
+                ma50_1 = get_scalar_value(df['50_MA'].iloc[-1])
+                ma200_1 = get_scalar_value(df['200_MA'].iloc[-1])
+                rsi_1 = get_scalar_value(df['RSI'].iloc[-1])
+                macd_1 = get_scalar_value(df['MACD'].iloc[-1])
+                macd_signal_1 = get_scalar_value(df['MACD_Signal'].iloc[-1])
+
+            # Previous values (iloc[-2])
+            if not df.empty and len(df) >= 2:
+                macd_2 = get_scalar_value(df['MACD'].iloc[-2])
+                macd_signal_2 = get_scalar_value(df['MACD_Signal'].iloc[-2])
+                ma50_2 = get_scalar_value(df['50_MA'].iloc[-2])
+                ma200_2 = get_scalar_value(df['200_MA'].iloc[-2])
+
+        except ValueError as ve:
+            st.error(f"❌ Value Error during scalar extraction for {ticker} ({company}): {ve}. This might indicate unexpected data. Skipping strategy checks.")
+            print(f"DEBUG: Scalar extraction ValueError for {ticker}: {ve}")
+            heatmap_data.append(heatmap_row)
+            continue
+        except IndexError as ie:
+            st.error(f"❌ Index Error during scalar extraction for {ticker} ({company}): {ie}. Not enough data points to extract latest values. Skipping strategy checks.")
+            heatmap_data.append(heatmap_row)
+            continue
+        except Exception as e:
+            st.error(f"❌ An unexpected error occurred during scalar extraction for {ticker} ({company}): {e}. Skipping strategy checks.")
+            print(f"DEBUG: Unhandled error during scalar extraction for {ticker}: {e}")
             heatmap_data.append(heatmap_row)
             continue
 
+        # Consolidated check for sufficient & valid data for strategy evaluation
+        required_scalars = [ma20_1, ma50_1, ma200_1, rsi_1, macd_1, macd_signal_1,
+                            macd_2, macd_signal_2, ma50_2, ma200_2]
+
+        if any(s is None for s in required_scalars):
+            st.info(f"ℹ️ Not enough complete indicator data (or data conversion issues) for {ticker} ({company}). Skipping strategy checks for this ticker.")
+            for s_name, s_value in zip(['ma20_1', 'ma50_1', 'ma200_1', 'rsi_1', 'macd_1', 'macd_signal_1',
+                                        'macd_2', 'macd_signal_2', 'ma50_2', 'ma200_2'], required_scalars):
+                if s_value is None:
+                    print(f"DEBUG: For {ticker}, '{s_name}' is None.")
+            heatmap_data.append(heatmap_row)
+            continue
+
+        # --- Reusable conditions using the extracted scalar variables ---
+        macd_bullish_crossover = (macd_2 < macd_signal_2 and macd_1 > macd_signal_1)
+        golden_cross = (ma50_2 < ma200_2 and ma50_1 > ma200_1)
+        macd_bearish_crossover = (macd_2 > macd_signal_2 and macd_1 < macd_signal_1)
+        death_cross = (ma50_2 > ma200_2 and ma50_1 < ma200_1)
+
+
         # Bullish Strategies
-        if "Trend Trading" in selected_bullish and df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1]:
+        if "Trend Trading" in selected_bullish and ma20_1 > ma50_1:
             signals.append((ticker, "bullish", f"📈 Bullish - Trend Trading — {company}"))
             heatmap_row["Trend Trading"] = 1
 
-        if "RSI Oversold" in selected_bullish and df['RSI'].iloc[-1] < 30:
-            signals.append((ticker, "bullish", f"📈 Bullish - RSI Oversold — {company} (RSI={df['RSI'].iloc[-1]:.1f})"))
-            heatmap_row["RSI Oversold"] = 1
+        if "RSI Oversold" in selected_bullish and rsi_1 < 30:
+            signals.append((ticker, "bullish", f"📈 Bullish - RSI Oversold — {company} (RSI={rsi_1:.1f})"))
+            heatmap_row["RSI Oversold"] = round(rsi_1, 1) # Store the actual RSI value
 
-        # MACD Bullish Crossover Condition (re-used for confirmation)
-        macd_bullish_crossover = (df['MACD'].iloc[-2] < df['MACD_Signal'].iloc[-2] and \
-                                  df['MACD'].iloc[-1] > df['MACD_Signal'].iloc[-1])
         if "MACD Bullish Crossover" in selected_bullish and macd_bullish_crossover:
             signals.append((ticker, "bullish", f"📈 Bullish - MACD Bullish Crossover — {company}"))
             heatmap_row["MACD Bullish Crossover"] = 1
         
-        # Golden Cross Condition (re-used for confirmation)
-        golden_cross = (df['50_MA'].iloc[-2] < df['200_MA'].iloc[-2]) and \
-                       (df['50_MA'].iloc[-1] > df['200_MA'].iloc[-1])
         if "Golden Cross" in selected_bullish and golden_cross:
             signals.append((ticker, "bullish", f"✨ Bullish - Golden Cross — {company}"))
             heatmap_row["Golden Cross"] = 1
 
         # --- New Bullish Confirmation Strategy ---
         if "Trend + MACD Bullish" in selected_bullish:
-            if (df['20_MA'].iloc[-1] > df['50_MA'].iloc[-1]) and macd_bullish_crossover:
+            if (ma20_1 > ma50_1) and macd_bullish_crossover:
                 signals.append((ticker, "bullish", f"✨ Bullish - Trend + MACD Confirmed — {company}"))
                 heatmap_row["Trend + MACD Bullish"] = 1
 
 
         # Bearish Strategies
-        if "RSI Overbought" in selected_bearish and df['RSI'].iloc[-1] > 70:
-            signals.append((ticker, "bearish", f"📉 Bearish - RSI Overbought — {company} (RSI={df['RSI'].iloc[-1]:.1f})"))
-            heatmap_row["RSI Overbought"] = 1
+        if "RSI Overbought" in selected_bearish and rsi_1 > 70:
+            signals.append((ticker, "bearish", f"📉 Bearish - RSI Overbought — {company} (RSI={rsi_1:.1f})"))
+            heatmap_row["RSI Overbought"] = round(rsi_1, 1) # Store the actual RSI value
 
-        # MACD Bearish Crossover Condition (re-used for confirmation)
-        macd_bearish_crossover = (df['MACD'].iloc[-2] > df['MACD_Signal'].iloc[-2] and \
-                                  df['MACD'].iloc[-1] < df['MACD_Signal'].iloc[-1])
         if "MACD Bearish Crossover" in selected_bearish and macd_bearish_crossover:
             signals.append((ticker, "bearish", f"📉 Bearish - MACD Bearish Crossover — {company}"))
             heatmap_row["MACD Bearish Crossover"] = 1
         
-        # Death Cross Condition (re-used for confirmation)
-        death_cross = (df['50_MA'].iloc[-2] > df['200_MA'].iloc[-2]) and \
-                      (df['50_MA'].iloc[-1] < df['200_MA'].iloc[-1])
         if "Death Cross" in selected_bearish and death_cross:
             signals.append((ticker, "bearish", f"💀 Bearish - Death Cross — {company}"))
             heatmap_row["Death Cross"] = 1
         
         # --- New Bearish Confirmation Strategy ---
         if "Death Cross + RSI Bearish" in selected_bearish:
-            if death_cross and (df['RSI'].iloc[-1] > 70):
+            if death_cross and (rsi_1 > 70):
                 signals.append((ticker, "bearish", f"💀 Bearish - Death Cross + RSI Confirmed — {company}"))
                 heatmap_row["Death Cross + RSI Bearish"] = 1
 
@@ -177,6 +241,8 @@ for ticker in TICKERS:
 
     except Exception as e:
         st.error(f"❌ Error processing {ticker} ({company}): {e}")
+        print(f"DEBUG: Unhandled error for {ticker}: {e}") # This will print to your terminal
+
 
 # --- Signal Display ---
 if signals:
@@ -201,7 +267,6 @@ if heatmap_data:
     heatmap_df["Bullish Total"] = heatmap_df[bullish_strategies].sum(axis=1)
     heatmap_df["Bearish Total"] = heatmap_df[bearish_strategies].sum(axis=1)
 
-    # Ensure all strategies, including new confirmation ones, are ordered correctly
     ordered_cols = ["Label"] + bullish_strategies + ["Bullish Total"] + bearish_strategies + ["Bearish Total"]
     heatmap_df = heatmap_df[ordered_cols]
 
@@ -224,27 +289,40 @@ if heatmap_data:
     matrix = heatmap_df.set_index("Label")[bullish_strategies + bearish_strategies]
 
     def custom_color(val, strat):
+        # If the value is 0, it means no signal for this strategy, map to neutral color
         if val == 0:
-            return 0.0
-        elif strat in bullish_strategies:
-            return 1.0
-        elif strat in bearish_strategies:
-            return -1.0
+            return 0.0 
+        
+        # For RSI strategies, if a non-zero value is present, it means a signal.
+        # We still want a binary color (green for oversold, red for overbought).
+        if strat == "RSI Oversold":
+            return 1.0 # Maps to green in the colorscale
+        elif strat == "RSI Overbought":
+            return -1.0 # Maps to red in the colorscale
+        
+        # For other strategies that still use 0 or 1
+        elif strat in bullish_strategies: 
+            return 1.0 # Maps to green
+        elif strat in bearish_strategies: 
+            return -1.0 # Maps to red
+        
+        return 0.0 # Fallback for any unhandled case (shouldn't be reached with current logic)
+
 
     matrix_scaled = matrix.copy()
     for col in matrix.columns:
         matrix_scaled[col] = matrix[col].apply(lambda v: custom_color(v, col))
 
     custom_colorscale = [
-        [0.0, "lightcoral"],
-        [0.5, "#eeeeee"],
-        [1.0, "lightgreen"]
+        [0.0, "lightcoral"], # Corresponds to -1.0 for bearish signals
+        [0.5, "#eeeeee"],   # Corresponds to 0.0 for no signal
+        [1.0, "lightgreen"] # Corresponds to 1.0 for bullish signals
     ]
 
     fig = px.imshow(
         matrix_scaled,
         color_continuous_scale=custom_colorscale,
-        text_auto=True,
+        text_auto=True, # This will display the RSI number for RSI cells, or 1/0 for others
         aspect="auto"
     )
     fig.update_layout(margin=dict(t=30, b=30, l=30, r=30))
