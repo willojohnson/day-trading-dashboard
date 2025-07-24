@@ -4,8 +4,8 @@ import pandas as pd
 import datetime
 from streamlit_autorefresh import st_autorefresh
 import plotly.express as px
-import plotly.graph_objects as go # New import for detailed charts
-from plotly.subplots import make_subplots # New import for subplots
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # --- Tickers to Monitor ---
 TICKERS = ["NVDA", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP", "TSM", "DDOG", "BTSG"]
@@ -309,8 +309,10 @@ def plot_stock_chart(ticker_symbol, company_name):
         # Moving Averages
         fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['20_MA'], line=dict(color='orange', width=1), name='20 MA', legendgroup='MA'), row=1, col=1)
         fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['50_MA'], line=dict(color='blue', width=1), name='50 MA', legendgroup='MA'), row=1, col=1)
-        # Only add 200 MA if enough data
-        if len(chart_df) >= 200 and not chart_df['200_MA'].iloc[-1:].isnull().all():
+        
+        # --- CORRECTED 200 MA ADDITION LOGIC ---
+        # Check that the 200_MA column has enough non-NaN data points at the end
+        if '200_MA' in chart_df.columns and len(chart_df) >= 200 and pd.notna(chart_df['200_MA'].iloc[-1]):
             fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['200_MA'], line=dict(color='purple', width=1), name='200 MA', legendgroup='MA'), row=1, col=1)
 
 
@@ -360,7 +362,7 @@ def plot_stock_chart(ticker_symbol, company_name):
 
     except Exception as e:
         st.error(f"❌ Error generating chart for {ticker_symbol} ({company_name}): {e}")
-        print(f"DEBUG: Chart generation error for {ticker_symbol}: {e}") # Print to console for debugging
+        print(f"DEBUG: Chart generation error for {ticker_symbol}: {e}")
 
 # Call the function for the selected ticker
 if selected_chart_ticker:
