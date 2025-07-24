@@ -306,50 +306,57 @@ def plot_stock_chart(ticker_symbol, company_name):
             decreasing_line_color='red', decreasing_fillcolor='red'
         ), row=1, col=1)
 
-        # Moving Averages
-        fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['20_MA'], line=dict(color='orange', width=1), name='20 MA', legendgroup='MA'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['50_MA'], line=dict(color='blue', width=1), name='50 MA', legendgroup='MA'), row=1, col=1)
+        # Moving Averages - Check if the series contains any valid (non-NaN) data before plotting
+        if not chart_df['20_MA'].empty and chart_df['20_MA'].dropna().any():
+            fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['20_MA'], line=dict(color='orange', width=1), name='20 MA', legendgroup='MA'), row=1, col=1)
+        if not chart_df['50_MA'].empty and chart_df['50_MA'].dropna().any():
+            fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['50_MA'], line=dict(color='blue', width=1), name='50 MA', legendgroup='MA'), row=1, col=1)
         
-        # --- CORRECTED 200 MA ADDITION LOGIC ---
-        # Check that the 200_MA column has enough non-NaN data points at the end
-        if '200_MA' in chart_df.columns and len(chart_df) >= 200 and pd.notna(chart_df['200_MA'].iloc[-1]):
+        # --- REVISED 200 MA ADDITION LOGIC (Most likely fix for your issue) ---
+        # Check if the 200_MA Series is not empty AND contains at least one non-NaN value.
+        if not chart_df['200_MA'].empty and chart_df['200_MA'].dropna().any():
             fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['200_MA'], line=dict(color='purple', width=1), name='200 MA', legendgroup='MA'), row=1, col=1)
 
 
         # --- 2. MACD Subplot ---
-        fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['MACD'], line=dict(color='green', width=1), name='MACD Line', legendgroup='MACD'), row=2, col=1)
-        fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['MACD_Signal'], line=dict(color='red', width=1), name='Signal Line', legendgroup='MACD'), row=2, col=1)
+        if not chart_df['MACD'].empty and chart_df['MACD'].dropna().any():
+            fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['MACD'], line=dict(color='green', width=1), name='MACD Line', legendgroup='MACD'), row=2, col=1)
+        if not chart_df['MACD_Signal'].empty and chart_df['MACD_Signal'].dropna().any():
+            fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['MACD_Signal'], line=dict(color='red', width=1), name='Signal Line', legendgroup='MACD'), row=2, col=1)
         # MACD Histogram
-        macd_histogram_colors = ['rgba(0,128,0,0.7)' if val >= 0 else 'rgba(255,0,0,0.7)' for val in chart_df['MACD_Hist']]
-        fig.add_trace(go.Bar(x=chart_df.index, y=chart_df['MACD_Hist'], name='MACD Hist', marker_color=macd_histogram_colors, legendgroup='MACD'), row=2, col=1)
+        if not chart_df['MACD_Hist'].empty and chart_df['MACD_Hist'].dropna().any():
+            macd_histogram_colors = ['rgba(0,128,0,0.7)' if val >= 0 else 'rgba(255,0,0,0.7)' for val in chart_df['MACD_Hist']]
+            fig.add_trace(go.Bar(x=chart_df.index, y=chart_df['MACD_Hist'], name='MACD Hist', marker_color=macd_histogram_colors, legendgroup='MACD'), row=2, col=1)
 
 
         # --- 3. RSI Subplot ---
-        fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['RSI'], line=dict(color='darkorange', width=1.5), name='RSI', legendgroup='RSI'), row=3, col=1)
-        # RSI Overbought/Oversold lines
-        fig.add_trace(go.Scatter(x=chart_df.index, y=[70] * len(chart_df), line=dict(color='grey', width=1, dash='dash'), name='RSI Overbought', legendgroup='RSI'), row=3, col=1)
-        fig.add_trace(go.Scatter(x=chart_df.index, y=[30] * len(chart_df), line=dict(color='grey', width=1, dash='dash'), name='RSI Oversold', legendgroup='RSI'), row=3, col=1)
+        if not chart_df['RSI'].empty and chart_df['RSI'].dropna().any():
+            fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['RSI'], line=dict(color='darkorange', width=1.5), name='RSI', legendgroup='RSI'), row=3, col=1)
+            # RSI Overbought/Oversold lines (always add if RSI itself is plotted)
+            fig.add_trace(go.Scatter(x=chart_df.index, y=[70] * len(chart_df), line=dict(color='grey', width=1, dash='dash'), name='RSI Overbought', legendgroup='RSI'), row=3, col=1)
+            fig.add_trace(go.Scatter(x=chart_df.index, y=[30] * len(chart_df), line=dict(color='grey', width=1, dash='dash'), name='RSI Oversold', legendgroup='RSI'), row=3, col=1)
 
 
         # --- 4. Volume Subplot ---
-        volume_colors = ['rgba(0,128,0,0.5)' if chart_df['Close'].iloc[i] > chart_df['Open'].iloc[i] else 'rgba(255,0,0,0.5)' for i in range(len(chart_df))]
-        fig.add_trace(go.Bar(x=chart_df.index, y=chart_df['Volume'], name='Volume', marker_color=volume_colors, legendgroup='Volume'), row=4, col=1)
+        if not chart_df['Volume'].empty and chart_df['Volume'].dropna().any():
+            volume_colors = ['rgba(0,128,0,0.5)' if chart_df['Close'].iloc[i] > chart_df['Open'].iloc[i] else 'rgba(255,0,0,0.5)' for i in range(len(chart_df))]
+            fig.add_trace(go.Bar(x=chart_df.index, y=chart_df['Volume'], name='Volume', marker_color=volume_colors, legendgroup='Volume'), row=4, col=1)
 
 
         # --- Update Layout and Axes ---
         fig.update_layout(
             title=f'{ticker_symbol} ({company_name}) Interactive Chart (5-Minute Interval)',
-            xaxis_rangeslider_visible=False, # Hide the default range slider for cleaner look
-            height=900, # Adjust height for better visibility of multiple subplots
-            template="plotly_dark", # Often preferred for trading dashboards
-            hovermode="x unified", # Shows tooltip for all traces at a given x-value
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1) # Place legend on top
+            xaxis_rangeslider_visible=False,
+            height=900,
+            template="plotly_dark",
+            hovermode="x unified",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
 
         # Update Y-axis titles
         fig.update_yaxes(title_text="Price", row=1, col=1)
         fig.update_yaxes(title_text="MACD", row=2, col=1)
-        fig.update_yaxes(title_text="RSI", range=[0, 100], row=3, col=1) # Ensure RSI is 0-100
+        fig.update_yaxes(title_text="RSI", range=[0, 100], row=3, col=1)
         fig.update_yaxes(title_text="Volume", row=4, col=1)
 
         # Remove whitespace between subplots and adjust margins
