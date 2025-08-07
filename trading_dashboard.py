@@ -46,7 +46,9 @@ selected_bullish = st.sidebar.multiselect("Bullish Strategies", all_bullish_stra
 selected_bearish = st.sidebar.multiselect("Bearish Strategies", all_bearish_strategies, default=all_bearish_strategies)
 
 # --- Timeframe Selector ---
-timeframe = st.sidebar.selectbox("Select Timeframe", ["5m", "15m", "30m", "1h", "1d"], index=4)
+# Updated list of options for the timeframe selectbox
+timeframe_options = ["5m", "15m", "30m", "1h", "1d", "3 month", "6 month", "YTD", "1 year", "5 year"]
+timeframe = st.sidebar.selectbox("Select Timeframe", timeframe_options, index=4)
 
 # --- Strategy Definitions (in a collapsible expander) ---
 with st.sidebar.expander("📘 Strategy Definitions"):
@@ -69,14 +71,34 @@ tab1, tab2 = st.tabs(["📊 Dashboard Overview", "📈 Chart Analysis"])
 @st.cache_data(ttl=refresh_rate)
 def fetch_and_process_data(ticker, timeframe):
     end_date = datetime.datetime.now()
-    if timeframe == '1d':
+    start_date = None
+    interval = '1d' # Default interval for longer timeframes
+
+    if timeframe == '5m' or timeframe == '15m' or timeframe == '30m' or timeframe == '1h':
+        start_date = end_date - datetime.timedelta(days=7) # 7 days is a safe period for intraday intervals
+        interval = timeframe
+    elif timeframe == '1d':
         start_date = end_date - datetime.timedelta(days=365) # 1 year for daily
-    elif timeframe == '1h':
-        start_date = end_date - datetime.timedelta(days=60) # 60 days for hourly
-    else: # 5m, 15m, 30m intervals
-        start_date = end_date - datetime.timedelta(days=7) # 7 days is a safe period
+        interval = '1d'
+    elif timeframe == '3 month':
+        start_date = end_date - datetime.timedelta(days=90)
+    elif timeframe == '6 month':
+        start_date = end_date - datetime.timedelta(days=180)
+    elif timeframe == 'YTD':
+        start_date = datetime.datetime(end_date.year, 1, 1)
+    elif timeframe == '1 year':
+        start_date = end_date - datetime.timedelta(days=365)
+    elif timeframe == '5 year':
+        start_date = end_date - datetime.timedelta(days=5*365)
     
-    df = yf.download(ticker, start=start_date, end=end_date, interval=timeframe)
+    # Check if start_date has been determined before downloading
+    if start_date:
+        df = yf.download(ticker, start=start_date, end=end_date, interval=interval)
+    else:
+        # Fallback if an unexpected timeframe is selected
+        st.error(f"Error: Unsupported timeframe '{timeframe}'.")
+        return None, "Unsupported timeframe."
+
     if df.empty or 'Close' not in df.columns:
         return None, "No valid data."
 
@@ -183,7 +205,8 @@ with tab1:
     st.markdown("### 📊 Market Overview")
     kpi_ticker = st.selectbox("Select a Ticker to view KPIs", TICKERS, index=0, key="kpi_select")
     
-    kpi_df, _ = fetch_and_process_data(kpi_ticker, "1d")
+    # We always need at least a year of daily data for the KPIs, so we force that
+    kpi_df, _ = fetch_and_process_data(kpi_ticker, "1 year")
     
     # Updated logic for KPI section to prevent errors on insufficient data
     if kpi_df is not None and not kpi_df.empty and len(kpi_df) >= 2:
