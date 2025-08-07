@@ -102,7 +102,6 @@ def fetch_and_process_data(ticker, timeframe):
 
 # --- Main Logic ---
 signals = []
-heatmap_data = []
 heatmap_matrix = pd.DataFrame(index=TICKERS, columns=all_bullish_strategies + all_bearish_strategies).fillna('')
 
 with st.spinner("⚙️ Processing data and generating signals..."):
@@ -129,10 +128,6 @@ with st.spinner("⚙️ Processing data and generating signals..."):
             df['MACD'].iloc[-2], df['MACD_Signal'].iloc[-2]
         )
 
-        heatmap_row = {"Ticker": ticker, "Label": f"{ticker} — {company}"}
-        for strat in all_bullish_strategies + all_bearish_strategies:
-            heatmap_row[strat] = ""
-
         # Reusable conditions
         macd_bullish_crossover = (macd_2 < macd_signal_2 and macd_1 > macd_signal_1)
         golden_cross = (ma50_2 < ma200_2 and ma50_1 > ma200_1)
@@ -155,6 +150,7 @@ with st.spinner("⚙️ Processing data and generating signals..."):
         if "Golden Cross" in selected_bullish and golden_cross:
             signals.append((ticker, "bullish", f"✨ Bullish - Golden Cross — {company}"))
             heatmap_matrix.loc[ticker, "Golden Cross"] = "✔"
+            st.success(f"🔥 GOLDEN CROSS DETECTED for **{ticker} - {company}**!") # <<< FLASH NOTIFICATION
         
         if "Trend + MACD Bullish" in selected_bullish:
             if (ma20_1 > ma50_1) and macd_bullish_crossover:
@@ -173,13 +169,12 @@ with st.spinner("⚙️ Processing data and generating signals..."):
         if "Death Cross" in selected_bearish and death_cross:
             signals.append((ticker, "bearish", f"💀 Bearish - Death Cross — {company}"))
             heatmap_matrix.loc[ticker, "Death Cross"] = "✔"
+            st.error(f"🚨 DEATH CROSS DETECTED for **{ticker} - {company}**!") # <<< FLASH NOTIFICATION
         
         if "Death Cross + RSI Bearish" in selected_bearish:
             if death_cross and (rsi_1 > 70):
                 signals.append((ticker, "bearish", f"💀 Bearish - Death Cross + RSI Confirmed — {company}"))
                 heatmap_matrix.loc[ticker, "Death Cross + RSI Bearish"] = "✔"
-        
-        heatmap_data.append(heatmap_row)
 
 
 # --- DASHBOARD OVERVIEW TAB ---
