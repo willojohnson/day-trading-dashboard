@@ -194,21 +194,24 @@ with tab1:
     kpi_df, _ = fetch_and_process_data(kpi_ticker, "1d")
     
     # Updated logic for KPI section to prevent errors on insufficient data
-    if kpi_df is not None and not kpi_df.empty and len(kpi_df) >= 2 and \
-       not pd.isna(kpi_df['Close'].iloc[-1]) and not pd.isna(kpi_df['Close'].iloc[-2]):
+    if kpi_df is not None and not kpi_df.empty and len(kpi_df) >= 2:
         latest_price = kpi_df['Close'].iloc[-1]
         previous_price = kpi_df['Close'].iloc[-2]
-        change_pct = ((latest_price - previous_price) / previous_price) * 100
         
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric(label=f"Price ({kpi_ticker})", value=f"${latest_price:.2f}", delta=f"{change_pct:.2f}%")
-        with col2:
-            st.metric(label="Volume", value=f"{kpi_df['Volume'].iloc[-1]:,}")
-        with col3:
-            st.metric(label="Today's Range", value=f"${kpi_df['Low'].iloc[-1]:.2f} - ${kpi_df['High'].iloc[-1]:.2f}")
+        if not pd.isna(latest_price) and not pd.isna(previous_price):
+            change_pct = ((latest_price - previous_price) / previous_price) * 100
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric(label=f"Price ({kpi_ticker})", value=f"${latest_price:.2f}", delta=f"{change_pct:.2f}%")
+            with col2:
+                st.metric(label="Volume", value=f"{kpi_df['Volume'].iloc[-1]:,}")
+            with col3:
+                st.metric(label="Today's Range", value=f"${kpi_df['Low'].iloc[-1]:.2f} - ${kpi_df['High'].iloc[-1]:.2f}")
+        else:
+            st.warning(f"⚠️ No recent pricing data for {kpi_ticker} to calculate KPIs. Please check back later.")
     else:
-        st.warning(f"⚠️ No recent pricing data or insufficient data for {kpi_ticker} to calculate KPIs. Please check back later.")
+        st.warning(f"⚠️ Insufficient data for {kpi_ticker} to calculate KPIs. Please check back later.")
 
 
     # --- Signal Display ---
@@ -303,7 +306,7 @@ with tab2:
     if chart_ticker:
         chart_df, error_msg = fetch_and_process_data(chart_ticker, timeframe)
         
-        if chart_df is not None:
+        if chart_df is not None and not chart_df.empty:
             # Create candlestick chart
             fig_candlestick = go.Figure(data=[
                 go.Candlestick(
