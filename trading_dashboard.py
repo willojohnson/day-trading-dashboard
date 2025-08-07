@@ -4,7 +4,105 @@ import pandas as pd
 import datetime
 from streamlit_autorefresh import st_autorefresh
 import plotly.express as px
-import plotly.graph_objects as go # New import for candlestick chart
+import plotly.graph_objects as go
+
+# --- Custom CSS for a modern, dark theme look ---
+st.markdown("""
+<style>
+    /* Main app container */
+    .main .block-container {
+        padding-top: 2rem;
+        padding-right: 2rem;
+        padding-left: 2rem;
+        padding-bottom: 2rem;
+    }
+
+    /* General text and headers */
+    h1, h2, h3, h4, h5, h6 {
+        color: #f0f2f6;
+    }
+
+    /* Container styling for a card-like effect */
+    .st-emotion-cache-1px0vsu { /* This class targets the st.container */
+        background-color: #262730;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    
+    /* Metrics styling */
+    [data-testid="stMetric"] {
+        background-color: #1a1a1a;
+        padding: 20px;
+        border-radius: 10px;
+        border-left: 5px solid #4ade80; /* A pop of color */
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    
+    /* Metric label */
+    [data-testid="stMetricLabel"] label {
+        font-size: 1rem;
+        color: #9ca3af;
+        font-weight: 500;
+    }
+
+    /* Metric value */
+    [data-testid="stMetricValue"] {
+        font-size: 1.8rem;
+        font-weight: 600;
+        color: #f0f2f6;
+    }
+    
+    /* Delta styling (green for positive, red for negative) */
+    .st-emotion-cache-1l02z8h { /* Up delta color */
+        color: #4ade80;
+    }
+    .st-emotion-cache-121g26h { /* Down delta color */
+        color: #f87171;
+    }
+
+    /* Main Title */
+    .st-emotion-cache-1629p8f {
+        color: #4ade80;
+    }
+
+    /* Sidebar styling */
+    .st-emotion-cache-14a01j8 {
+        background-color: #1a1a1a;
+    }
+    .st-emotion-cache-1wivd2x { /* Sidebar header color */
+        color: #f0f2f6;
+    }
+
+    /* Selectbox styling */
+    .st-emotion-cache-1v0bb1h {
+        background-color: #262730;
+        color: #f0f2f6;
+        border-radius: 5px;
+    }
+
+    /* Tabs styling */
+    [data-testid="stTab"] {
+        background-color: #1a1a1a;
+        color: #9ca3af;
+        border-radius: 10px;
+    }
+    [data-testid="stTab"][aria-selected="true"] {
+        background-color: #262730;
+        color: #4ade80;
+        border-radius: 10px;
+    }
+
+    /* Table styling */
+    .dataframe th {
+        background-color: #262730;
+        color: #f0f2f6;
+    }
+    
+</style>
+""", unsafe_allow_html=True)
+
 
 # --- Tickers to Monitor ---
 TICKERS = ["NVDA", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP", "TSM", "DDOG", "BTSG"]
@@ -29,7 +127,7 @@ TICKER_NAMES = {
 }
 
 # --- Page Setup ---
-st.set_page_config(layout="wide")
+st.set_page_config(layout="wide", page_title="Trading Dashboard", page_icon="📈")
 st.title("📈 Real-Time Trading Dashboard")
 
 # --- Sidebar Options ---
@@ -203,16 +301,17 @@ with tab1:
         if not pd.isna(latest_price) and not pd.isna(previous_price):
             change_pct = ((latest_price - previous_price) / previous_price) * 100
             
-            # Reordered columns to group related metrics
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric(label=f"Price ({kpi_ticker})", value=f"${latest_price:.2f}", delta=f"{change_pct:.2f}%")
-            with col2:
-                st.metric(label="Today's Range", value=f"${low_price:.2f} - ${high_price:.2f}")
-            with col3:
-                st.metric(label="Current Volume", value=f"{current_volume:,}")
-            with col4:
-                st.metric(label="Average Volume", value=f"{avg_volume:,.0f}")
+            with st.container():
+                st.markdown("#### Key Performance Indicators")
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric(label=f"Price ({kpi_ticker})", value=f"${latest_price:.2f}", delta=f"{change_pct:.2f}%")
+                with col2:
+                    st.metric(label="Today's Range", value=f"${low_price:.2f} - ${high_price:.2f}")
+                with col3:
+                    st.metric(label="Current Volume", value=f"{current_volume:,}")
+                with col4:
+                    st.metric(label="Average Volume", value=f"{avg_volume:,.0f}")
         else:
             st.warning(f"⚠️ No recent pricing data for {kpi_ticker} to calculate KPIs. Please check back later.")
     else:
@@ -220,103 +319,107 @@ with tab1:
 
 
     # --- Signal Display ---
-    st.markdown("### ✅ Current Trade Signals")
-    if signals:
-        for _, signal_type, msg in signals:
-            if signal_type == "bullish":
-                st.success(msg)
-            elif signal_type == "bearish":
-                st.error(msg)
-    else:
-        st.info("No trade signals at this time for any active strategies.")
-    
-    st.markdown("---")
+    with st.container():
+        st.markdown("### ✅ Current Trade Signals")
+        if signals:
+            for _, signal_type, msg in signals:
+                if signal_type == "bullish":
+                    st.success(msg)
+                elif signal_type == "bearish":
+                    st.error(msg)
+        else:
+            st.info("No trade signals at this time for any active strategies.")
     
     # --- Heatmap Matrix + Visual ---
     if not heatmap_matrix.empty:
-        st.markdown("### 🧭 Strategy Signal Matrix")
-        
-        # Create a display DataFrame with full company names for the `st.dataframe` table
-        display_matrix = heatmap_matrix.copy()
-        display_matrix.index = [f"{ticker} — {TICKER_NAMES.get(ticker, ticker)}" for ticker in display_matrix.index]
-        
-        def to_numeric_signal(val):
-            return 1 if val != "" else 0
-
-        numeric_heatmap_df = display_matrix[all_bullish_strategies + all_bearish_strategies].applymap(to_numeric_signal)
-        display_matrix["Bullish Total"] = numeric_heatmap_df[all_bullish_strategies].sum(axis=1)
-        display_matrix["Bearish Total"] = numeric_heatmap_df[all_bearish_strategies].sum(axis=1)
-
-        ordered_cols = all_bullish_strategies + ["Bullish Total"] + all_bearish_strategies + ["Bearish Total"]
-        display_matrix = display_matrix[ordered_cols]
-
-        def highlight_total_signals(row):
-            styles = [''] * len(row)
-            bullish_total = row["Bullish Total"]
-            bearish_total = row["Bearish Total"]
+        with st.container():
+            st.markdown("### 🧭 Strategy Signal Matrix")
             
-            # The indices are relative to the ordered_cols list
-            bullish_total_idx = len(all_bullish_strategies)
-            bearish_total_idx = len(all_bullish_strategies) + len(all_bearish_strategies) + 1
+            # Create a display DataFrame with full company names for the `st.dataframe` table
+            display_matrix = heatmap_matrix.copy()
+            display_matrix.index = [f"{ticker} — {TICKER_NAMES.get(ticker, ticker)}" for ticker in display_matrix.index]
             
-            if bullish_total > 0 and bullish_total > bearish_total:
-                styles[bullish_total_idx] = 'background-color: #d4edda; color: #155724;' # Light green for bullish
-            elif bearish_total > 0 and bearish_total > bullish_total:
-                styles[bearish_total_idx] = 'background-color: #f8d7da; color: #721c24;' # Light red for bearish
-            return styles
-            
-        st.dataframe(
-            display_matrix.style
-            .apply(highlight_total_signals, axis=1)
-            .set_table_styles([
-                {'selector': 'th', 'props': [('background-color', '#f0f2f6')]},
-                {'selector': '.st-table', 'props': [('width', '100%')]}
-            ]),
-            use_container_width=True
-        )
+            def to_numeric_signal(val):
+                return 1 if val != "" else 0
 
-        st.markdown("### 🔥 Strategy Activation Heatmap")
+            numeric_heatmap_df = display_matrix[all_bullish_strategies + all_bearish_strategies].applymap(to_numeric_signal)
+            display_matrix["Bullish Total"] = numeric_heatmap_df[all_bullish_strategies].sum(axis=1)
+            display_matrix["Bearish Total"] = numeric_heatmap_df[all_bearish_strategies].sum(axis=1)
 
-        # Create a numerical matrix for coloring
-        color_data = []
-        for index, row in heatmap_matrix.iterrows():
-            row_colors = []
-            for col in heatmap_matrix.columns:
-                val = row[col]
-                if val != "":
-                    if col in all_bullish_strategies:
-                        row_colors.append(1) # Bullish -> Green
-                    elif col in all_bearish_strategies:
-                        row_colors.append(-1) # Bearish -> Red
+            ordered_cols = all_bullish_strategies + ["Bullish Total"] + all_bearish_strategies + ["Bearish Total"]
+            display_matrix = display_matrix[ordered_cols]
+
+            def highlight_total_signals(row):
+                styles = [''] * len(row)
+                bullish_total = row["Bullish Total"]
+                bearish_total = row["Bearish Total"]
+                
+                # The indices are relative to the ordered_cols list
+                bullish_total_idx = len(all_bullish_strategies)
+                bearish_total_idx = len(all_bullish_strategies) + len(all_bearish_strategies) + 1
+                
+                if bullish_total > 0 and bullish_total > bearish_total:
+                    styles[bullish_total_idx] = 'background-color: #4ade80; color: #155724;' # Light green for bullish
+                elif bearish_total > 0 and bearish_total > bullish_total:
+                    styles[bearish_total_idx] = 'background-color: #f87171; color: #721c24;' # Light red for bearish
+                return styles
+                
+            st.dataframe(
+                display_matrix.style
+                .apply(highlight_total_signals, axis=1)
+                .set_table_styles([
+                    {'selector': 'th', 'props': [('background-color', '#262730')]},
+                    {'selector': '.st-table', 'props': [('width', '100%')]}
+                ]),
+                use_container_width=True
+            )
+
+        with st.container():
+            st.markdown("### 🔥 Strategy Activation Heatmap")
+
+            # Create a numerical matrix for coloring
+            color_data = []
+            for index, row in heatmap_matrix.iterrows():
+                row_colors = []
+                for col in heatmap_matrix.columns:
+                    val = row[col]
+                    if val != "":
+                        if col in all_bullish_strategies:
+                            row_colors.append(1) # Bullish -> Green
+                        elif col in all_bearish_strategies:
+                            row_colors.append(-1) # Bearish -> Red
+                        else:
+                            row_colors.append(0) # Should not happen, but for safety
                     else:
-                        row_colors.append(0) # Should not happen, but for safety
-                else:
-                    row_colors.append(0) # No signal -> Neutral
-            color_data.append(row_colors)
+                        row_colors.append(0) # No signal -> Neutral
+                color_data.append(row_colors)
 
-        # Create a single Plotly figure with a heatmap
-        fig = go.Figure(go.Heatmap(
-            z=color_data,
-            x=heatmap_matrix.columns,
-            y=[f"{ticker} — {TICKER_NAMES.get(ticker, ticker)}" for ticker in heatmap_matrix.index],
-            text=heatmap_matrix.values,
-            texttemplate="%{text}",
-            textfont={"size": 12},
-            colorscale=[[0, 'lightcoral'], [0.5, 'white'], [1, 'lightgreen']],
-            zmin=-1, zmax=1,
-            xgap=1, ygap=1
-        ))
+            # Create a single Plotly figure with a heatmap
+            fig = go.Figure(go.Heatmap(
+                z=color_data,
+                x=heatmap_matrix.columns,
+                y=[f"{ticker} — {TICKER_NAMES.get(ticker, ticker)}" for ticker in heatmap_matrix.index],
+                text=heatmap_matrix.values,
+                texttemplate="%{text}",
+                textfont={"size": 12},
+                colorscale=[[0, '#ef4444'], [0.5, '#1a1a1a'], [1, '#4ade80']], # Use Tailwind colors
+                zmin=-1, zmax=1,
+                xgap=1, ygap=1
+            ))
 
-        fig.update_layout(
-            title="Strategy Activation Heatmap",
-            xaxis_title="Strategy",
-            yaxis_title="Ticker",
-            xaxis={'side': 'top'},
-            margin=dict(t=50, b=50, l=50, r=50),
-            autosize=True
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
+            fig.update_layout(
+                title="Strategy Activation Heatmap",
+                xaxis_title="Strategy",
+                yaxis_title="Ticker",
+                xaxis={'side': 'top'},
+                margin=dict(t=50, b=50, l=50, r=50),
+                autosize=True,
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='white')
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
 
 # --- CHART ANALYSIS TAB ---
 with tab2:
@@ -345,7 +448,10 @@ with tab2:
             fig_candlestick.update_layout(
                 title=f"{TICKER_NAMES.get(chart_ticker, chart_ticker)} Price Action ({timeframe} interval)",
                 xaxis_rangeslider_visible=False,
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                paper_bgcolor='#1a1a1a', # Set a dark background
+                plot_bgcolor='#1a1a1a',
+                font=dict(color='white')
             )
             
             st.plotly_chart(fig_candlestick, use_container_width=True)
