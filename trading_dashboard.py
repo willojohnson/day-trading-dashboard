@@ -103,6 +103,7 @@ def fetch_and_process_data(ticker, timeframe):
 # --- Main Logic ---
 signals = []
 heatmap_data = []
+heatmap_matrix = pd.DataFrame(index=TICKERS, columns=all_bullish_strategies + all_bearish_strategies).fillna('')
 
 with st.spinner("⚙️ Processing data and generating signals..."):
     for ticker in TICKERS:
@@ -116,10 +117,6 @@ with st.spinner("⚙️ Processing data and generating signals..."):
         # Check if we have enough data for all indicators
         if len(df) < 200:
             st.info(f"ℹ️ Not enough data for {ticker} ({company}) to calculate all indicators. Skipping strategy checks.")
-            heatmap_row = {"Ticker": ticker, "Label": f"{ticker} — {company}"}
-            for strat in all_bullish_strategies + all_bearish_strategies:
-                heatmap_row[strat] = ""
-            heatmap_data.append(heatmap_row)
             continue
         
         # Extract scalar values from the last two rows
@@ -145,42 +142,42 @@ with st.spinner("⚙️ Processing data and generating signals..."):
         # Bullish Strategies
         if "Trend Trading" in selected_bullish and ma20_1 > ma50_1:
             signals.append((ticker, "bullish", f"📈 Bullish - Trend Trading — {company}"))
-            heatmap_row["Trend Trading"] = "✔"
+            heatmap_matrix.loc[ticker, "Trend Trading"] = "✔"
 
         if "RSI Oversold" in selected_bullish and rsi_1 < 30:
             signals.append((ticker, "bullish", f"📈 Bullish - RSI Oversold — {company} (RSI={rsi_1:.1f})"))
-            heatmap_row["RSI Oversold"] = f"{rsi_1:.1f}"
+            heatmap_matrix.loc[ticker, "RSI Oversold"] = f"{rsi_1:.1f}"
 
         if "MACD Bullish Crossover" in selected_bullish and macd_bullish_crossover:
             signals.append((ticker, "bullish", f"📈 Bullish - MACD Bullish Crossover — {company}"))
-            heatmap_row["MACD Bullish Crossover"] = "✔"
+            heatmap_matrix.loc[ticker, "MACD Bullish Crossover"] = "✔"
         
         if "Golden Cross" in selected_bullish and golden_cross:
             signals.append((ticker, "bullish", f"✨ Bullish - Golden Cross — {company}"))
-            heatmap_row["Golden Cross"] = "✔"
+            heatmap_matrix.loc[ticker, "Golden Cross"] = "✔"
         
         if "Trend + MACD Bullish" in selected_bullish:
             if (ma20_1 > ma50_1) and macd_bullish_crossover:
                 signals.append((ticker, "bullish", f"✨ Bullish - Trend + MACD Confirmed — {company}"))
-                heatmap_row["Trend + MACD Bullish"] = "✔"
+                heatmap_matrix.loc[ticker, "Trend + MACD Bullish"] = "✔"
 
         # Bearish Strategies
         if "RSI Overbought" in selected_bearish and rsi_1 > 70:
             signals.append((ticker, "bearish", f"📉 Bearish - RSI Overbought — {company} (RSI={rsi_1:.1f})"))
-            heatmap_row["RSI Overbought"] = f"{rsi_1:.1f}"
+            heatmap_matrix.loc[ticker, "RSI Overbought"] = f"{rsi_1:.1f}"
 
         if "MACD Bearish Crossover" in selected_bearish and macd_bearish_crossover:
             signals.append((ticker, "bearish", f"📉 Bearish - MACD Bearish Crossover — {company}"))
-            heatmap_row["MACD Bearish Crossover"] = "✔"
+            heatmap_matrix.loc[ticker, "MACD Bearish Crossover"] = "✔"
         
         if "Death Cross" in selected_bearish and death_cross:
             signals.append((ticker, "bearish", f"💀 Bearish - Death Cross — {company}"))
-            heatmap_row["Death Cross"] = "✔"
+            heatmap_matrix.loc[ticker, "Death Cross"] = "✔"
         
         if "Death Cross + RSI Bearish" in selected_bearish:
             if death_cross and (rsi_1 > 70):
                 signals.append((ticker, "bearish", f"💀 Bearish - Death Cross + RSI Confirmed — {company}"))
-                heatmap_row["Death Cross + RSI Bearish"] = "✔"
+                heatmap_matrix.loc[ticker, "Death Cross + RSI Bearish"] = "✔"
         
         heatmap_data.append(heatmap_row)
 
@@ -233,37 +230,40 @@ with tab1:
     st.markdown("---")
     
     # --- Heatmap Matrix + Visual ---
-    if heatmap_data:
+    if not heatmap_matrix.empty:
         st.markdown("### 🧭 Strategy Signal Matrix")
         
-        heatmap_df = pd.DataFrame(heatmap_data)
-        for strat in all_bullish_strategies + all_bearish_strategies:
-            if strat not in heatmap_df.columns:
-                heatmap_df[strat] = ""
-
+        # Create a display DataFrame with full company names for the `st.dataframe` table
+        display_matrix = heatmap_matrix.copy()
+        display_matrix.index = [f"{ticker} — {TICKER_NAMES.get(ticker, ticker)}" for ticker in display_matrix.index]
+        
         def to_numeric_signal(val):
             return 1 if val != "" else 0
 
-        numeric_heatmap_df = heatmap_df[all_bullish_strategies + all_bearish_strategies].applymap(to_numeric_signal)
-        heatmap_df["Bullish Total"] = numeric_heatmap_df[all_bullish_strategies].sum(axis=1)
-        heatmap_df["Bearish Total"] = numeric_heatmap_df[all_bearish_strategies].sum(axis=1)
+        numeric_heatmap_df = display_matrix[all_bullish_strategies + all_bearish_strategies].applymap(to_numeric_signal)
+        display_matrix["Bullish Total"] = numeric_heatmap_df[all_bullish_strategies].sum(axis=1)
+        display_matrix["Bearish Total"] = numeric_heatmap_df[all_bearish_strategies].sum(axis=1)
 
-        ordered_cols = ["Label"] + all_bullish_strategies + ["Bullish Total"] + all_bearish_strategies + ["Bearish Total"]
-        heatmap_df = heatmap_df[ordered_cols]
+        ordered_cols = all_bullish_strategies + ["Bullish Total"] + all_bearish_strategies + ["Bearish Total"]
+        display_matrix = display_matrix[ordered_cols]
 
         def highlight_total_signals(row):
             styles = [''] * len(row)
             bullish_total = row["Bullish Total"]
             bearish_total = row["Bearish Total"]
             
+            # The indices are relative to the ordered_cols list
+            bullish_total_idx = len(all_bullish_strategies)
+            bearish_total_idx = len(all_bullish_strategies) + len(all_bearish_strategies) + 1
+            
             if bullish_total > 0 and bullish_total > bearish_total:
-                styles[-2] = 'background-color: #d4edda; color: #155724;' # Light green for bullish
+                styles[bullish_total_idx] = 'background-color: #d4edda; color: #155724;' # Light green for bullish
             elif bearish_total > 0 and bearish_total > bullish_total:
-                styles[-1] = 'background-color: #f8d7da; color: #721c24;' # Light red for bearish
+                styles[bearish_total_idx] = 'background-color: #f8d7da; color: #721c24;' # Light red for bearish
             return styles
             
         st.dataframe(
-            heatmap_df.style
+            display_matrix.style
             .apply(highlight_total_signals, axis=1)
             .set_table_styles([
                 {'selector': 'th', 'props': [('background-color', '#f0f2f6')]},
@@ -274,50 +274,78 @@ with tab1:
 
         st.markdown("### 🔥 Strategy Activation Heatmap")
 
-        matrix = heatmap_df.set_index("Label")[all_bullish_strategies + all_bearish_strategies]
-        
-        # New, more explicit coloring logic for the heatmap
-        color_matrix = matrix.copy().astype(str)
-        for col in color_matrix.columns:
-            if col in all_bullish_strategies:
-                color_matrix[col] = color_matrix[col].apply(lambda x: 'lightgreen' if x != "" else 'transparent')
-            elif col in all_bearish_strategies:
-                color_matrix[col] = color_matrix[col].apply(lambda x: 'lightcoral' if x != "" else 'transparent')
+        # Create a numerical matrix for coloring
+        color_data = []
+        for index, row in heatmap_matrix.iterrows():
+            row_colors = []
+            for col in heatmap_matrix.columns:
+                val = row[col]
+                if val != "":
+                    if col in all_bullish_strategies:
+                        row_colors.append(1) # Bullish -> Green
+                    elif col in all_bearish_strategies:
+                        row_colors.append(-1) # Bearish -> Red
+                    else:
+                        row_colors.append(0) # Should not happen, but for safety
+                else:
+                    row_colors.append(0) # No signal -> Neutral
+            color_data.append(row_colors)
 
-        fig = go.Figure(data=go.Heatmap(
-            z=matrix.where(matrix != "", 0).astype(bool).astype(int),
-            x=matrix.columns,
-            y=matrix.index,
-            colorscale=[[0, 'white'], [1, 'lightgreen']],
-            showscale=False,
-            text=matrix.values,
+        # Create a single Plotly figure with a heatmap
+        fig = go.Figure(go.Heatmap(
+            z=color_data,
+            x=heatmap_matrix.columns,
+            y=[f"{ticker} — {TICKER_NAMES.get(ticker, ticker)}" for ticker in heatmap_matrix.index],
+            text=heatmap_matrix.values,
             texttemplate="%{text}",
-            xgap=3, ygap=3,
+            textfont={"size": 12},
+            colorscale=[[0, 'lightcoral'], [0.5, 'white'], [1, 'lightgreen']],
+            zmin=-1, zmax=1,
+            xgap=1, ygap=1
         ))
 
-        for col in all_bearish_strategies:
-            bearish_mask = (matrix[col] != "")
-            if bearish_mask.any():
-                fig.add_trace(go.Heatmap(
-                    z=matrix[col].where(matrix[col] == "", 0).astype(bool).astype(int),
-                    x=[col],
-                    y=matrix.index[bearish_mask],
-                    colorscale=[[0, 'white'], [1, 'lightcoral']],
-                    showscale=False,
-                    text=matrix[col].loc[bearish_mask],
-                    texttemplate="%{text}",
-                    xgap=3, ygap=3,
-                    opacity=1
-                ))
-        
         fig.update_layout(
             title="Strategy Activation Heatmap",
             xaxis_title="Strategy",
             yaxis_title="Ticker",
-            legend_title="Color Scale",
-            autosize=True,
-            margin=dict(t=30, b=30, l=30, r=30),
-            xaxis={'side': 'top'}
+            xaxis={'side': 'top'},
+            margin=dict(t=50, b=50, l=50, r=50),
+            autosize=True
         )
         
         st.plotly_chart(fig, use_container_width=True)
+
+# --- CHART ANALYSIS TAB ---
+with tab2:
+    st.markdown("### 🔎 Detailed Chart Analysis")
+    chart_ticker = st.selectbox("Select a Ticker", options=TICKERS, key="chart_ticker")
+    
+    if chart_ticker:
+        chart_df, error_msg = fetch_and_process_data(chart_ticker, timeframe)
+        
+        if chart_df is not None and not chart_df.empty:
+            # Create candlestick chart
+            fig_candlestick = go.Figure(data=[
+                go.Candlestick(
+                    x=chart_df.index,
+                    open=chart_df['Open'],
+                    high=chart_df['High'],
+                    low=chart_df['Low'],
+                    close=chart_df['Close'],
+                    name='Price'
+                ),
+                go.Scatter(x=chart_df.index, y=chart_df['20_MA'], mode='lines', name='20 MA', line=dict(color='orange', width=2)),
+                go.Scatter(x=chart_df.index, y=chart_df['50_MA'], mode='lines', name='50 MA', line=dict(color='blue', width=2)),
+                go.Scatter(x=chart_df.index, y=chart_df['200_MA'], mode='lines', name='200 MA', line=dict(color='red', width=2))
+            ])
+            
+            fig_candlestick.update_layout(
+                title=f"{TICKER_NAMES.get(chart_ticker, chart_ticker)} Price Action ({timeframe} interval)",
+                xaxis_rangeslider_visible=False,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            
+            st.plotly_chart(fig_candlestick, use_container_width=True)
+
+        else:
+            st.warning(f"⚠️ No data available for {chart_ticker} at the selected timeframe.")
