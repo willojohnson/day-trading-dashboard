@@ -194,9 +194,9 @@ with tab1:
     kpi_df, _ = fetch_and_process_data(kpi_ticker, "1d")
     
     if kpi_df is not None and not kpi_df.empty:
-        # Check for NaN values before trying to access them
-        if pd.isna(kpi_df['Close'].iloc[-1]) or len(kpi_df) < 2:
-            st.warning(f"⚠️ No recent pricing data available for {kpi_ticker}. Please check back later.")
+        # Check for NaN values and sufficient data length before trying to access them
+        if len(kpi_df) < 2 or pd.isna(kpi_df['Close'].iloc[-1]) or pd.isna(kpi_df['Close'].iloc[-2]):
+            st.warning(f"⚠️ No recent pricing data or insufficient data for {kpi_ticker} to calculate KPIs. Please check back later.")
         else:
             latest_price = kpi_df['Close'].iloc[-1]
             previous_price = kpi_df['Close'].iloc[-2]
