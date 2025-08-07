@@ -46,7 +46,7 @@ selected_bullish = st.sidebar.multiselect("Bullish Strategies", all_bullish_stra
 selected_bearish = st.sidebar.multiselect("Bearish Strategies", all_bearish_strategies, default=all_bearish_strategies)
 
 # --- Timeframe Selector ---
-timeframe = st.sidebar.selectbox("Select Timeframe", ["5m", "15m", "30m", "1h", "1d"], index=0)
+timeframe = st.sidebar.selectbox("Select Timeframe", ["5m", "15m", "30m", "1h", "1d"], index=4)
 
 # --- Strategy Definitions (in a collapsible expander) ---
 with st.sidebar.expander("📘 Strategy Definitions"):
