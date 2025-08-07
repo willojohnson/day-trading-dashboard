@@ -198,6 +198,7 @@ with tab1:
         # Explicitly get the scalar value using .item() to avoid ValueError
         latest_price = kpi_df['Close'].iloc[-1].item()
         previous_price = kpi_df['Close'].iloc[-2].item()
+        volume = kpi_df['Volume'].iloc[-1].item() # Use .item() for the Volume as well
         
         if not pd.isna(latest_price) and not pd.isna(previous_price):
             change_pct = ((latest_price - previous_price) / previous_price) * 100
@@ -206,7 +207,7 @@ with tab1:
             with col1:
                 st.metric(label=f"Price ({kpi_ticker})", value=f"${latest_price:.2f}", delta=f"{change_pct:.2f}%")
             with col2:
-                st.metric(label="Volume", value=f"{kpi_df['Volume'].iloc[-1]:,}")
+                st.metric(label="Volume", value=f"{volume:,}") # Use the volume variable here
             with col3:
                 st.metric(label="Today's Range", value=f"${kpi_df['Low'].iloc[-1]:.2f} - ${kpi_df['High'].iloc[-1]:.2f}")
         else:
