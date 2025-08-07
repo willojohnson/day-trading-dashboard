@@ -203,13 +203,14 @@ with tab1:
         if not pd.isna(latest_price) and not pd.isna(previous_price):
             change_pct = ((latest_price - previous_price) / previous_price) * 100
             
+            # Reordered columns to group related metrics
             col1, col2, col3, col4 = st.columns(4)
             with col1:
                 st.metric(label=f"Price ({kpi_ticker})", value=f"${latest_price:.2f}", delta=f"{change_pct:.2f}%")
             with col2:
-                st.metric(label="Current Volume", value=f"{current_volume:,}")
-            with col3:
                 st.metric(label="Today's Range", value=f"${low_price:.2f} - ${high_price:.2f}")
+            with col3:
+                st.metric(label="Current Volume", value=f"{current_volume:,}")
             with col4:
                 st.metric(label="Average Volume", value=f"{avg_volume:,.0f}")
         else:
