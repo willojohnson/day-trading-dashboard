@@ -275,65 +275,49 @@ with tab1:
         st.markdown("### 🔥 Strategy Activation Heatmap")
 
         matrix = heatmap_df.set_index("Label")[all_bullish_strategies + all_bearish_strategies]
+        
+        # New, more explicit coloring logic for the heatmap
+        color_matrix = matrix.copy().astype(str)
+        for col in color_matrix.columns:
+            if col in all_bullish_strategies:
+                color_matrix[col] = color_matrix[col].apply(lambda x: 'lightgreen' if x != "" else 'transparent')
+            elif col in all_bearish_strategies:
+                color_matrix[col] = color_matrix[col].apply(lambda x: 'lightcoral' if x != "" else 'transparent')
 
-        def custom_color_from_string(val, strat):
-            if val == "": return 0.5
-            if strat in all_bullish_strategies: return 1.0
-            if strat in all_bearish_strategies: return 0.0
-            return 0.5
+        fig = go.Figure(data=go.Heatmap(
+            z=matrix.where(matrix != "", 0).astype(bool).astype(int),
+            x=matrix.columns,
+            y=matrix.index,
+            colorscale=[[0, 'white'], [1, 'lightgreen']],
+            showscale=False,
+            text=matrix.values,
+            texttemplate="%{text}",
+            xgap=3, ygap=3,
+        ))
 
-        matrix_for_colors = matrix.copy()
-        for col in matrix_for_colors.columns:
-            matrix_for_colors[col] = matrix_for_colors[col].apply(lambda v: custom_color_from_string(v, col))
-
-        custom_colorscale = [
-            [0.0, "lightcoral"],
-            [0.5, "#f0f2f6"],
-            [1.0, "lightgreen"]
-        ]
-
-        fig = px.imshow(
-            matrix_for_colors,
-            color_continuous_scale=custom_colorscale,
-            text_auto=True,
-            aspect="auto"
+        for col in all_bearish_strategies:
+            bearish_mask = (matrix[col] != "")
+            if bearish_mask.any():
+                fig.add_trace(go.Heatmap(
+                    z=matrix[col].where(matrix[col] == "", 0).astype(bool).astype(int),
+                    x=[col],
+                    y=matrix.index[bearish_mask],
+                    colorscale=[[0, 'white'], [1, 'lightcoral']],
+                    showscale=False,
+                    text=matrix[col].loc[bearish_mask],
+                    texttemplate="%{text}",
+                    xgap=3, ygap=3,
+                    opacity=1
+                ))
+        
+        fig.update_layout(
+            title="Strategy Activation Heatmap",
+            xaxis_title="Strategy",
+            yaxis_title="Ticker",
+            legend_title="Color Scale",
+            autosize=True,
+            margin=dict(t=30, b=30, l=30, r=30),
+            xaxis={'side': 'top'}
         )
         
-        fig.update_traces(text=matrix.values, texttemplate="%{text}")
-        fig.update_layout(margin=dict(t=30, b=30, l=30, r=30))
         st.plotly_chart(fig, use_container_width=True)
-
-# --- CHART ANALYSIS TAB ---
-with tab2:
-    st.markdown("### 🔎 Detailed Chart Analysis")
-    chart_ticker = st.selectbox("Select a Ticker", options=TICKERS, key="chart_ticker")
-    
-    if chart_ticker:
-        chart_df, error_msg = fetch_and_process_data(chart_ticker, timeframe)
-        
-        if chart_df is not None and not chart_df.empty:
-            # Create candlestick chart
-            fig_candlestick = go.Figure(data=[
-                go.Candlestick(
-                    x=chart_df.index,
-                    open=chart_df['Open'],
-                    high=chart_df['High'],
-                    low=chart_df['Low'],
-                    close=chart_df['Close'],
-                    name='Price'
-                ),
-                go.Scatter(x=chart_df.index, y=chart_df['20_MA'], mode='lines', name='20 MA', line=dict(color='orange', width=2)),
-                go.Scatter(x=chart_df.index, y=chart_df['50_MA'], mode='lines', name='50 MA', line=dict(color='blue', width=2)),
-                go.Scatter(x=chart_df.index, y=chart_df['200_MA'], mode='lines', name='200 MA', line=dict(color='red', width=2))
-            ])
-            
-            fig_candlestick.update_layout(
-                title=f"{TICKER_NAMES.get(chart_ticker, chart_ticker)} Price Action ({timeframe} interval)",
-                xaxis_rangeslider_visible=False,
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-            )
-            
-            st.plotly_chart(fig_candlestick, use_container_width=True)
-
-        else:
-            st.warning(f"⚠️ No data available for {chart_ticker} at the selected timeframe.")
