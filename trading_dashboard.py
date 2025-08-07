@@ -195,8 +195,9 @@ with tab1:
     
     # Updated logic for KPI section to prevent errors on insufficient data
     if kpi_df is not None and not kpi_df.empty and len(kpi_df) >= 2:
-        latest_price = kpi_df['Close'].iloc[-1]
-        previous_price = kpi_df['Close'].iloc[-2]
+        # Explicitly get the scalar value using .item() to avoid ValueError
+        latest_price = kpi_df['Close'].iloc[-1].item()
+        previous_price = kpi_df['Close'].iloc[-2].item()
         
         if not pd.isna(latest_price) and not pd.isna(previous_price):
             change_pct = ((latest_price - previous_price) / previous_price) * 100
