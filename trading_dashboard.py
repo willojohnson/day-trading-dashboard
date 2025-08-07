@@ -195,21 +195,23 @@ with tab1:
         # Explicitly get the scalar value using .item() to avoid ValueError
         latest_price = kpi_df['Close'].iloc[-1].item()
         previous_price = kpi_df['Close'].iloc[-2].item()
-        volume = kpi_df['Volume'].iloc[-1].item()
+        current_volume = kpi_df['Volume'].iloc[-1].item()
         low_price = kpi_df['Low'].iloc[-1].item()
         high_price = kpi_df['High'].iloc[-1].item()
+        avg_volume = kpi_df['Volume'].mean().item()
         
         if not pd.isna(latest_price) and not pd.isna(previous_price):
             change_pct = ((latest_price - previous_price) / previous_price) * 100
             
-            col1, col2, col3 = st.columns(3)
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
                 st.metric(label=f"Price ({kpi_ticker})", value=f"${latest_price:.2f}", delta=f"{change_pct:.2f}%")
             with col2:
-                st.metric(label="Volume", value=f"{volume:,}")
+                st.metric(label="Current Volume", value=f"{current_volume:,}")
             with col3:
-                # Use the new scalar variables here
                 st.metric(label="Today's Range", value=f"${low_price:.2f} - ${high_price:.2f}")
+            with col4:
+                st.metric(label="Average Volume", value=f"{avg_volume:,.0f}")
         else:
             st.warning(f"⚠️ No recent pricing data for {kpi_ticker} to calculate KPIs. Please check back later.")
     else:
