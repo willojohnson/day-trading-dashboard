@@ -193,22 +193,22 @@ with tab1:
     
     kpi_df, _ = fetch_and_process_data(kpi_ticker, "1d")
     
-    if kpi_df is not None and not kpi_df.empty:
-        # Check for NaN values and sufficient data length before trying to access them
-        if len(kpi_df) < 2 or pd.isna(kpi_df['Close'].iloc[-1]) or pd.isna(kpi_df['Close'].iloc[-2]):
-            st.warning(f"⚠️ No recent pricing data or insufficient data for {kpi_ticker} to calculate KPIs. Please check back later.")
-        else:
-            latest_price = kpi_df['Close'].iloc[-1]
-            previous_price = kpi_df['Close'].iloc[-2]
-            change_pct = ((latest_price - previous_price) / previous_price) * 100
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric(label=f"Price ({kpi_ticker})", value=f"${latest_price:.2f}", delta=f"{change_pct:.2f}%")
-            with col2:
-                st.metric(label="Volume", value=f"{kpi_df['Volume'].iloc[-1]:,}")
-            with col3:
-                st.metric(label="Today's Range", value=f"${kpi_df['Low'].iloc[-1]:.2f} - ${kpi_df['High'].iloc[-1]:.2f}")
+    # Updated logic for KPI section to prevent errors on insufficient data
+    if kpi_df is not None and not kpi_df.empty and len(kpi_df) >= 2 and \
+       not pd.isna(kpi_df['Close'].iloc[-1]) and not pd.isna(kpi_df['Close'].iloc[-2]):
+        latest_price = kpi_df['Close'].iloc[-1]
+        previous_price = kpi_df['Close'].iloc[-2]
+        change_pct = ((latest_price - previous_price) / previous_price) * 100
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric(label=f"Price ({kpi_ticker})", value=f"${latest_price:.2f}", delta=f"{change_pct:.2f}%")
+        with col2:
+            st.metric(label="Volume", value=f"{kpi_df['Volume'].iloc[-1]:,}")
+        with col3:
+            st.metric(label="Today's Range", value=f"${kpi_df['Low'].iloc[-1]:.2f} - ${kpi_df['High'].iloc[-1]:.2f}")
+    else:
+        st.warning(f"⚠️ No recent pricing data or insufficient data for {kpi_ticker} to calculate KPIs. Please check back later.")
 
 
     # --- Signal Display ---
