@@ -158,13 +158,11 @@ signals = []
 heatmap_matrix = None # Initialize to None
 
 with st.spinner("⚙️ Processing data and generating signals..."):
-    # First, let's check if any strategies are selected.
-    if not selected_bullish and not selected_bearish:
-        st.warning("⚠️ Please select at least one strategy from the sidebar to generate signals.")
-    else:
-        # Only create the DataFrame if there are strategies to show.
+    # NEW: Check if any strategies are selected and ONLY create the DataFrame if they are.
+    if selected_bullish or selected_bearish:
+        # Create the DataFrame with the selected strategies as columns
         heatmap_matrix = pd.DataFrame(index=TICKERS, columns=selected_bullish + selected_bearish).fillna('')
-
+        
         for ticker in TICKERS:
             company = TICKER_NAMES.get(ticker, ticker)
             df, error_msg = fetch_and_process_data(ticker, timeframe)
@@ -251,6 +249,9 @@ with st.spinner("⚙️ Processing data and generating signals..."):
                  signals.append((ticker, "bearish", f"☁️ Bearish - Ichimoku Cloud Breakdown — {company}"))
                  heatmap_matrix.loc[ticker, "Ichimoku Bearish"] = "✔"
 
+    else:
+        st.info("⚠️ Please select at least one strategy from the sidebar to generate signals and a heatmap.")
+
 
 # --- DASHBOARD OVERVIEW TAB ---
 with tab1:
@@ -298,14 +299,16 @@ with tab1:
                 st.success(msg)
             elif signal_type == "bearish":
                 st.error(msg)
-    else:
+    elif selected_bullish or selected_bearish: # Only show this if strategies are selected
         st.info("No trade signals at this time for any active strategies.")
+    else:
+        st.info("Please select strategies from the sidebar to see current trade signals.")
     
     st.markdown("---")
     
     # --- Heatmap Matrix + Visual ---
-    # NEW: Only create the heatmap if there are columns to display
-    if heatmap_matrix is not None and not heatmap_matrix.empty and not heatmap_matrix.columns.empty:
+    # NEW: Only create the heatmap if the DataFrame exists
+    if heatmap_matrix is not None:
         st.markdown("### 🧭 Strategy Signal Matrix")
         
         # Create a display DataFrame with full company names for the `st.dataframe` table
