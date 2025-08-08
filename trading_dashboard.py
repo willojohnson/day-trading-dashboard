@@ -166,12 +166,12 @@ with st.spinner("⚙️ Processing data and generating signals..."):
         
         # Extract scalar values from the last two rows
         ma20_1, ma50_1, ma200_1, rsi_1, macd_1, macd_signal_1 = (
-            df['20_MA'].iloc[-1], df['50_MA'].iloc[-1], df['200_MA'].iloc[-1],
-            df['RSI'].iloc[-1], df['MACD'].iloc[-1], df['MACD_Signal'].iloc[-1]
+            df['20_MA'].iloc[-1].item(), df['50_MA'].iloc[-1].item(), df['200_MA'].iloc[-1].item(),
+            df['RSI'].iloc[-1].item(), df['MACD'].iloc[-1].item(), df['MACD_Signal'].iloc[-1].item()
         )
         ma50_2, ma200_2, macd_2, macd_signal_2 = (
-            df['50_MA'].iloc[-2], df['200_MA'].iloc[-2],
-            df['MACD'].iloc[-2], df['MACD_Signal'].iloc[-2]
+            df['50_MA'].iloc[-2].item(), df['200_MA'].iloc[-2].item(),
+            df['MACD'].iloc[-2].item(), df['MACD_Signal'].iloc[-2].item()
         )
 
         # Reusable conditions
@@ -204,9 +204,9 @@ with st.spinner("⚙️ Processing data and generating signals..."):
                 heatmap_matrix.loc[ticker, "Trend + MACD Bullish"] = "✔"
 
         # Ichimoku Strategies
-        last_close = df['Close'].iloc[-1]
-        last_senkou_a = df['senkou_span_a'].iloc[-1]
-        last_senkou_b = df['senkou_span_b'].iloc[-1]
+        last_close = df['Close'].iloc[-1].item()
+        last_senkou_a = df['senkou_span_a'].iloc[-1].item()
+        last_senkou_b = df['senkou_span_b'].iloc[-1].item()
 
         if "Ichimoku Bullish" in selected_bullish and (last_close > last_senkou_a) and (last_close > last_senkou_b):
              signals.append((ticker, "bullish", f"☁️ Bullish - Ichimoku Cloud Breakout — {company}"))
