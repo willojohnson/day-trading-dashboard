@@ -155,13 +155,16 @@ def fetch_and_process_data(ticker, timeframe):
 
 # --- Main Logic ---
 signals = []
-heatmap_matrix = pd.DataFrame(index=TICKERS, columns=selected_bullish + selected_bearish).fillna('')
+heatmap_matrix = None # Initialize to None
 
 with st.spinner("⚙️ Processing data and generating signals..."):
     # First, let's check if any strategies are selected.
     if not selected_bullish and not selected_bearish:
         st.warning("⚠️ Please select at least one strategy from the sidebar to generate signals.")
     else:
+        # Only create the DataFrame if there are strategies to show.
+        heatmap_matrix = pd.DataFrame(index=TICKERS, columns=selected_bullish + selected_bearish).fillna('')
+
         for ticker in TICKERS:
             company = TICKER_NAMES.get(ticker, ticker)
             df, error_msg = fetch_and_process_data(ticker, timeframe)
@@ -301,7 +304,8 @@ with tab1:
     st.markdown("---")
     
     # --- Heatmap Matrix + Visual ---
-    if not heatmap_matrix.empty and not heatmap_matrix.columns.empty: # <--- FIX IS HERE
+    # Check if heatmap_matrix was created before trying to use it
+    if heatmap_matrix is not None and not heatmap_matrix.empty and not heatmap_matrix.columns.empty:
         st.markdown("### 🧭 Strategy Signal Matrix")
         
         # Create a display DataFrame with full company names for the `st.dataframe` table
