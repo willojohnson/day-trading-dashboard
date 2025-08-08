@@ -304,7 +304,7 @@ with tab1:
     st.markdown("---")
     
     # --- Heatmap Matrix + Visual ---
-    # Check if heatmap_matrix was created before trying to use it
+    # NEW: Only create the heatmap if there are columns to display
     if heatmap_matrix is not None and not heatmap_matrix.empty and not heatmap_matrix.columns.empty:
         st.markdown("### 🧭 Strategy Signal Matrix")
         
@@ -329,7 +329,7 @@ with tab1:
             bearish_total = row["Bearish Total"]
             
             try:
-                bullish_total_idx = selected_bullish.index("Bullish Total")
+                bullish_total_idx = ordered_cols.index("Bullish Total")
             except ValueError:
                 bullish_total_idx = len(selected_bullish)
             
