@@ -155,92 +155,98 @@ def fetch_and_process_data(ticker, timeframe):
 
 # --- Main Logic ---
 signals = []
-heatmap_matrix = pd.DataFrame(index=TICKERS, columns=all_bullish_strategies + all_bearish_strategies).fillna('')
+heatmap_matrix = pd.DataFrame(index=TICKERS, columns=selected_bullish + selected_bearish).fillna('')
 
 with st.spinner("⚙️ Processing data and generating signals..."):
-    for ticker in TICKERS:
-        company = TICKER_NAMES.get(ticker, ticker)
-        df, error_msg = fetch_and_process_data(ticker, timeframe)
+    # First, let's check if any strategies are selected.
+    if not selected_bullish and not selected_bearish:
+        st.warning("⚠️ Please select at least one strategy from the sidebar to generate signals.")
+    else:
+        for ticker in TICKERS:
+            company = TICKER_NAMES.get(ticker, ticker)
+            df, error_msg = fetch_and_process_data(ticker, timeframe)
 
-        if error_msg:
-            st.warning(f"⚠️ {error_msg} for {ticker} ({company}). Skipping...")
-            continue
-        
-        # Check if we have enough data for all indicators
-        if len(df) < 200:
-            st.info(f"ℹ️ Not enough data for {ticker} ({company}) to calculate all indicators. Skipping strategy checks.")
-            continue
-        
-        # Extract scalar values from the last two rows
-        ma20_1, ma50_1, ma200_1, rsi_1, macd_1, macd_signal_1 = (
-            df['20_MA'].iloc[-1].item(), df['50_MA'].iloc[-1].item(), df['200_MA'].iloc[-1].item(),
-            df['RSI'].iloc[-1].item(), df['MACD'].iloc[-1].item(), df['MACD_Signal'].iloc[-1].item()
-        )
-        ma50_2, ma200_2, macd_2, macd_signal_2 = (
-            df['50_MA'].iloc[-2].item(), df['200_MA'].iloc[-2].item(),
-            df['MACD'].iloc[-2].item(), df['MACD_Signal'].iloc[-2].item()
-        )
+            if error_msg:
+                st.warning(f"⚠️ {error_msg} for {ticker} ({company}). Skipping...")
+                continue
+            
+            # Check if we have enough data for all indicators
+            # The Ichimoku cloud needs at least 52 periods for Senkou Span B + 26 for shifting ahead = 78
+            # The 200MA needs 200 periods. Let's use 200 as the conservative minimum.
+            if len(df) < 200:
+                st.info(f"ℹ️ Not enough data for {ticker} ({company}) to calculate all indicators. Skipping strategy checks.")
+                continue
+            
+            # Extract scalar values from the last two rows
+            ma20_1, ma50_1, ma200_1, rsi_1, macd_1, macd_signal_1 = (
+                df['20_MA'].iloc[-1].item(), df['50_MA'].iloc[-1].item(), df['200_MA'].iloc[-1].item(),
+                df['RSI'].iloc[-1].item(), df['MACD'].iloc[-1].item(), df['MACD_Signal'].iloc[-1].item()
+            )
+            ma50_2, ma200_2, macd_2, macd_signal_2 = (
+                df['50_MA'].iloc[-2].item(), df['200_MA'].iloc[-2].item(),
+                df['MACD'].iloc[-2].item(), df['MACD_Signal'].iloc[-2].item()
+            )
 
-        # Reusable conditions
-        macd_bullish_crossover = (macd_2 < macd_signal_2 and macd_1 > macd_signal_1)
-        golden_cross = (ma50_2 < ma200_2 and ma50_1 > ma200_1)
-        macd_bearish_crossover = (macd_2 > macd_signal_2 and macd_1 < macd_signal_1)
-        death_cross = (ma50_2 > ma200_2 and ma50_1 < ma200_1)
+            # Reusable conditions
+            macd_bullish_crossover = (macd_2 < macd_signal_2 and macd_1 > macd_signal_1)
+            golden_cross = (ma50_2 < ma200_2 and ma50_1 > ma200_1)
+            macd_bearish_crossover = (macd_2 > macd_signal_2 and macd_1 < macd_signal_1)
+            death_cross = (ma50_2 > ma200_2 and ma50_1 < ma200_1)
 
-        # Bullish Strategies
-        if "Trend Trading" in selected_bullish and ma20_1 > ma50_1:
-            signals.append((ticker, "bullish", f"📈 Bullish - Trend Trading — {company}"))
-            heatmap_matrix.loc[ticker, "Trend Trading"] = "✔"
+            # Bullish Strategies
+            if "Trend Trading" in selected_bullish and ma20_1 > ma50_1:
+                signals.append((ticker, "bullish", f"📈 Bullish - Trend Trading — {company}"))
+                heatmap_matrix.loc[ticker, "Trend Trading"] = "✔"
 
-        if "RSI Oversold" in selected_bullish and rsi_1 < 30:
-            signals.append((ticker, "bullish", f"📈 Bullish - RSI Oversold — {company} (RSI={rsi_1:.1f})"))
-            heatmap_matrix.loc[ticker, "RSI Oversold"] = f"{rsi_1:.1f}"
+            if "RSI Oversold" in selected_bullish and rsi_1 < 30:
+                signals.append((ticker, "bullish", f"📈 Bullish - RSI Oversold — {company} (RSI={rsi_1:.1f})"))
+                heatmap_matrix.loc[ticker, "RSI Oversold"] = f"{rsi_1:.1f}"
 
-        if "MACD Bullish Crossover" in selected_bullish and macd_bullish_crossover:
-            signals.append((ticker, "bullish", f"📈 Bullish - MACD Bullish Crossover — {company}"))
-            heatmap_matrix.loc[ticker, "MACD Bullish Crossover"] = "✔"
-        
-        if "Golden Cross" in selected_bullish and golden_cross:
-            signals.append((ticker, "bullish", f"✨ Bullish - Golden Cross — {company}"))
-            heatmap_matrix.loc[ticker, "Golden Cross"] = "✔"
-            st.success(f"🔥 GOLDEN CROSS DETECTED for **{ticker} - {company}**!") # <<< FLASH NOTIFICATION
-        
-        if "Trend + MACD Bullish" in selected_bullish:
-            if (ma20_1 > ma50_1) and macd_bullish_crossover:
-                signals.append((ticker, "bullish", f"✨ Bullish - Trend + MACD Confirmed — {company}"))
-                heatmap_matrix.loc[ticker, "Trend + MACD Bullish"] = "✔"
+            if "MACD Bullish Crossover" in selected_bullish and macd_bullish_crossover:
+                signals.append((ticker, "bullish", f"📈 Bullish - MACD Bullish Crossover — {company}"))
+                heatmap_matrix.loc[ticker, "MACD Bullish Crossover"] = "✔"
+            
+            if "Golden Cross" in selected_bullish and golden_cross:
+                signals.append((ticker, "bullish", f"✨ Bullish - Golden Cross — {company}"))
+                heatmap_matrix.loc[ticker, "Golden Cross"] = "✔"
+                st.success(f"🔥 GOLDEN CROSS DETECTED for **{ticker} - {company}**!") # <<< FLASH NOTIFICATION
+            
+            if "Trend + MACD Bullish" in selected_bullish:
+                if (ma20_1 > ma50_1) and macd_bullish_crossover:
+                    signals.append((ticker, "bullish", f"✨ Bullish - Trend + MACD Confirmed — {company}"))
+                    heatmap_matrix.loc[ticker, "Trend + MACD Bullish"] = "✔"
 
-        # Ichimoku Strategies
-        last_close = df['Close'].iloc[-1].item()
-        last_senkou_a = df['senkou_span_a'].iloc[-1].item()
-        last_senkou_b = df['senkou_span_b'].iloc[-1].item()
+            # Ichimoku Strategies
+            last_close = df['Close'].iloc[-1].item()
+            last_senkou_a = df['senkou_span_a'].iloc[-1].item()
+            last_senkou_b = df['senkou_span_b'].iloc[-1].item()
 
-        if "Ichimoku Bullish" in selected_bullish and (last_close > last_senkou_a) and (last_close > last_senkou_b):
-             signals.append((ticker, "bullish", f"☁️ Bullish - Ichimoku Cloud Breakout — {company}"))
-             heatmap_matrix.loc[ticker, "Ichimoku Bullish"] = "✔"
+            if "Ichimoku Bullish" in selected_bullish and (last_close > last_senkou_a) and (last_close > last_senkou_b):
+                 signals.append((ticker, "bullish", f"☁️ Bullish - Ichimoku Cloud Breakout — {company}"))
+                 heatmap_matrix.loc[ticker, "Ichimoku Bullish"] = "✔"
 
-        # Bearish Strategies
-        if "RSI Overbought" in selected_bearish and rsi_1 > 70:
-            signals.append((ticker, "bearish", f"📉 Bearish - RSI Overbought — {company} (RSI={rsi_1:.1f})"))
-            heatmap_matrix.loc[ticker, "RSI Overbought"] = f"{rsi_1:.1f}"
+            # Bearish Strategies
+            if "RSI Overbought" in selected_bearish and rsi_1 > 70:
+                signals.append((ticker, "bearish", f"📉 Bearish - RSI Overbought — {company} (RSI={rsi_1:.1f})"))
+                heatmap_matrix.loc[ticker, "RSI Overbought"] = f"{rsi_1:.1f}"
 
-        if "MACD Bearish Crossover" in selected_bearish and macd_bearish_crossover:
-            signals.append((ticker, "bearish", f"📉 Bearish - MACD Bearish Crossover — {company}"))
-            heatmap_matrix.loc[ticker, "MACD Bearish Crossover"] = "✔"
-        
-        if "Death Cross" in selected_bearish and death_cross:
-            signals.append((ticker, "bearish", f"💀 Bearish - Death Cross — {company}"))
-            heatmap_matrix.loc[ticker, "Death Cross"] = "✔"
-            st.error(f"🚨 DEATH CROSS DETECTED for **{ticker} - {company}**!") # <<< FLASH NOTIFICATION
-        
-        if "Death Cross + RSI Bearish" in selected_bearish:
-            if death_cross and (rsi_1 > 70):
-                signals.append((ticker, "bearish", f"💀 Bearish - Death Cross + RSI Confirmed — {company}"))
-                heatmap_matrix.loc[ticker, "Death Cross + RSI Bearish"] = "✔"
-        
-        if "Ichimoku Bearish" in selected_bearish and (last_close < last_senkou_a) and (last_close < last_senkou_b):
-             signals.append((ticker, "bearish", f"☁️ Bearish - Ichimoku Cloud Breakdown — {company}"))
-             heatmap_matrix.loc[ticker, "Ichimoku Bearish"] = "✔"
+            if "MACD Bearish Crossover" in selected_bearish and macd_bearish_crossover:
+                signals.append((ticker, "bearish", f"📉 Bearish - MACD Bearish Crossover — {company}"))
+                heatmap_matrix.loc[ticker, "MACD Bearish Crossover"] = "✔"
+            
+            if "Death Cross" in selected_bearish and death_cross:
+                signals.append((ticker, "bearish", f"💀 Bearish - Death Cross — {company}"))
+                heatmap_matrix.loc[ticker, "Death Cross"] = "✔"
+                st.error(f"🚨 DEATH CROSS DETECTED for **{ticker} - {company}**!") # <<< FLASH NOTIFICATION
+            
+            if "Death Cross + RSI Bearish" in selected_bearish:
+                if death_cross and (rsi_1 > 70):
+                    signals.append((ticker, "bearish", f"💀 Bearish - Death Cross + RSI Confirmed — {company}"))
+                    heatmap_matrix.loc[ticker, "Death Cross + RSI Bearish"] = "✔"
+            
+            if "Ichimoku Bearish" in selected_bearish and (last_close < last_senkou_a) and (last_close < last_senkou_b):
+                 signals.append((ticker, "bearish", f"☁️ Bearish - Ichimoku Cloud Breakdown — {company}"))
+                 heatmap_matrix.loc[ticker, "Ichimoku Bearish"] = "✔"
 
 
 # --- DASHBOARD OVERVIEW TAB ---
@@ -295,7 +301,7 @@ with tab1:
     st.markdown("---")
     
     # --- Heatmap Matrix + Visual ---
-    if not heatmap_matrix.empty:
+    if not heatmap_matrix.empty and not heatmap_matrix.columns.empty: # <--- FIX IS HERE
         st.markdown("### 🧭 Strategy Signal Matrix")
         
         # Create a display DataFrame with full company names for the `st.dataframe` table
@@ -305,11 +311,11 @@ with tab1:
         def to_numeric_signal(val):
             return 1 if val != "" else 0
 
-        numeric_heatmap_df = display_matrix[all_bullish_strategies + all_bearish_strategies].applymap(to_numeric_signal)
-        display_matrix["Bullish Total"] = numeric_heatmap_df[all_bullish_strategies].sum(axis=1)
-        display_matrix["Bearish Total"] = numeric_heatmap_df[all_bearish_strategies].sum(axis=1)
+        numeric_heatmap_df = display_matrix[selected_bullish + selected_bearish].applymap(to_numeric_signal)
+        display_matrix["Bullish Total"] = numeric_heatmap_df[selected_bullish].sum(axis=1)
+        display_matrix["Bearish Total"] = numeric_heatmap_df[selected_bearish].sum(axis=1)
 
-        ordered_cols = all_bullish_strategies + ["Bullish Total"] + all_bearish_strategies + ["Bearish Total"]
+        ordered_cols = selected_bullish + ["Bullish Total"] + selected_bearish + ["Bearish Total"]
         display_matrix = display_matrix[ordered_cols]
 
         # --- NEW Style function to highlight both non-zero totals ---
@@ -318,8 +324,15 @@ with tab1:
             bullish_total = row["Bullish Total"]
             bearish_total = row["Bearish Total"]
             
-            bullish_total_idx = len(all_bullish_strategies)
-            bearish_total_idx = len(all_bullish_strategies) + len(all_bearish_strategies) + 1
+            try:
+                bullish_total_idx = selected_bullish.index("Bullish Total")
+            except ValueError:
+                bullish_total_idx = len(selected_bullish)
+            
+            try:
+                bearish_total_idx = ordered_cols.index("Bearish Total")
+            except ValueError:
+                bearish_total_idx = len(ordered_cols)
             
             # Apply green highlight if bullish total is greater than 0
             if bullish_total > 0:
@@ -370,12 +383,10 @@ with tab1:
             textfont={"size": 12},
             colorscale=[[0, 'lightcoral'], [0.5, 'white'], [1, 'lightgreen']],
             zmin=-1, zmax=1,
-            # This is the key change: adding a visible line around each cell
-            line=dict(color='rgba(0, 0, 0, 0.2)', width=1), # Adjusted to a light gray color
+            line=dict(color='rgba(0, 0, 0, 0.2)', width=1),
             xgap=1, ygap=1
         ))
 
-        # This line forces the y-axis to match the top-to-bottom order of the table
         fig.update_layout(
             title="Strategy Activation Heatmap",
             xaxis_title="Strategy",
@@ -387,6 +398,8 @@ with tab1:
         )
         
         st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("The Strategy Signal Matrix is currently empty. Please select strategies from the sidebar to view the data.") # <--- NEW MESSAGE
 
 # --- CHART ANALYSIS TAB ---
 with tab2:
