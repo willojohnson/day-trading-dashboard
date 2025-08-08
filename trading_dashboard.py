@@ -49,7 +49,6 @@ selected_bullish = st.sidebar.multiselect("Bullish Strategies", all_bullish_stra
 selected_bearish = st.sidebar.multiselect("Bearish Strategies", all_bearish_strategies, default=all_bearish_strategies)
 
 # --- Timeframe Selector ---
-# Updated list of options for the timeframe selectbox
 timeframe_options = ["5m", "15m", "30m", "1h", "1d", "3 month", "6 month", "YTD", "1 year", "5 year"]
 timeframe = st.sidebar.selectbox("Select Timeframe", timeframe_options, index=4)
 
@@ -81,13 +80,13 @@ with st.sidebar.expander("📘 Strategy Definitions"):
 def fetch_and_process_data(ticker, timeframe):
     end_date = datetime.datetime.now()
     start_date = None
-    interval = '1d' # Default interval for longer timeframes
+    interval = '1d'
 
-    if timeframe == '5m' or timeframe == '15m' or timeframe == '30m' or timeframe == '1h':
-        start_date = end_date - datetime.timedelta(days=7) # 7 days is a safe period for intraday intervals
+    if timeframe in ['5m', '15m', '30m', '1h']:
+        start_date = end_date - datetime.timedelta(days=7)
         interval = timeframe
     elif timeframe == '1d':
-        start_date = end_date - datetime.timedelta(days=365) # 1 year for daily
+        start_date = end_date - datetime.timedelta(days=365)
         interval = '1d'
     elif timeframe == '3 month':
         start_date = end_date - datetime.timedelta(days=90)
@@ -100,11 +99,9 @@ def fetch_and_process_data(ticker, timeframe):
     elif timeframe == '5 year':
         start_date = end_date - datetime.timedelta(days=5*365)
     
-    # Check if start_date has been determined before downloading
     if start_date:
         df = yf.download(ticker, start=start_date, end=end_date, interval=interval)
     else:
-        # Fallback if an unexpected timeframe is selected
         st.error(f"Error: Unsupported timeframe '{timeframe}'.")
         return None, "Unsupported timeframe."
 
@@ -130,39 +127,29 @@ def fetch_and_process_data(ticker, timeframe):
     df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
 
     # --- Ichimoku Cloud Calculations ---
-    # Conversion Line (Tenkan-sen): (Highest High + Lowest Low) / 2 for the past 9 periods
     high_9 = df['High'].rolling(window=9).max()
     low_9 = df['Low'].rolling(window=9).min()
     df['tenkan_sen'] = (high_9 + low_9) / 2
     
-    # Base Line (Kijun-sen): (Highest High + Lowest Low) / 2 for the past 26 periods
     high_26 = df['High'].rolling(window=26).max()
     low_26 = df['Low'].rolling(window=26).min()
     df['kijun_sen'] = (high_26 + low_26) / 2
 
-    # Leading Span A (Senkou Span A): (Conversion Line + Base Line) / 2
     df['senkou_span_a'] = ((df['tenkan_sen'] + df['kijun_sen']) / 2).shift(26)
     
-    # Leading Span B (Senkou Span B): (Highest High + Lowest Low) / 2 for the past 52 periods
     high_52 = df['High'].rolling(window=52).max()
     low_52 = df['Low'].rolling(window=52).min()
     df['senkou_span_b'] = ((high_52 + low_52) / 2).shift(26)
 
-    # Lagging Span (Chikou Span): Close price plotted 26 periods behind
     df['chikou_span'] = df['Close'].shift(-26)
 
     return df, None
 
 # --- Main Logic ---
 signals = []
-heatmap_matrix = None # Initialize to None
 
 with st.spinner("⚙️ Processing data and generating signals..."):
-    # NEW: Check if any strategies are selected and ONLY create the DataFrame if they are.
     if selected_bullish or selected_bearish:
-        # Create the DataFrame with the selected strategies as columns
-        heatmap_matrix = pd.DataFrame(index=TICKERS, columns=selected_bullish + selected_bearish).fillna('')
-        
         for ticker in TICKERS:
             company = TICKER_NAMES.get(ticker, ticker)
             df, error_msg = fetch_and_process_data(ticker, timeframe)
@@ -171,14 +158,10 @@ with st.spinner("⚙️ Processing data and generating signals..."):
                 st.warning(f"⚠️ {error_msg} for {ticker} ({company}). Skipping...")
                 continue
             
-            # Check if we have enough data for all indicators
-            # The Ichimoku cloud needs at least 52 periods for Senkou Span B + 26 for shifting ahead = 78
-            # The 200MA needs 200 periods. Let's use 200 as the conservative minimum.
             if len(df) < 200:
                 st.info(f"ℹ️ Not enough data for {ticker} ({company}) to calculate all indicators. Skipping strategy checks.")
                 continue
             
-            # Extract scalar values from the last two rows
             ma20_1, ma50_1, ma200_1, rsi_1, macd_1, macd_signal_1 = (
                 df['20_MA'].iloc[-1].item(), df['50_MA'].iloc[-1].item(), df['200_MA'].iloc[-1].item(),
                 df['RSI'].iloc[-1].item(), df['MACD'].iloc[-1].item(), df['MACD_Signal'].iloc[-1].item()
@@ -188,7 +171,6 @@ with st.spinner("⚙️ Processing data and generating signals..."):
                 df['MACD'].iloc[-2].item(), df['MACD_Signal'].iloc[-2].item()
             )
 
-            # Reusable conditions
             macd_bullish_crossover = (macd_2 < macd_signal_2 and macd_1 > macd_signal_1)
             golden_cross = (ma50_2 < ma200_2 and ma50_1 > ma200_1)
             macd_bearish_crossover = (macd_2 > macd_signal_2 and macd_1 < macd_signal_1)
@@ -197,25 +179,20 @@ with st.spinner("⚙️ Processing data and generating signals..."):
             # Bullish Strategies
             if "Trend Trading" in selected_bullish and ma20_1 > ma50_1:
                 signals.append((ticker, "bullish", f"📈 Bullish - Trend Trading — {company}"))
-                heatmap_matrix.loc[ticker, "Trend Trading"] = "✔"
 
             if "RSI Oversold" in selected_bullish and rsi_1 < 30:
                 signals.append((ticker, "bullish", f"📈 Bullish - RSI Oversold — {company} (RSI={rsi_1:.1f})"))
-                heatmap_matrix.loc[ticker, "RSI Oversold"] = f"{rsi_1:.1f}"
 
             if "MACD Bullish Crossover" in selected_bullish and macd_bullish_crossover:
                 signals.append((ticker, "bullish", f"📈 Bullish - MACD Bullish Crossover — {company}"))
-                heatmap_matrix.loc[ticker, "MACD Bullish Crossover"] = "✔"
             
             if "Golden Cross" in selected_bullish and golden_cross:
                 signals.append((ticker, "bullish", f"✨ Bullish - Golden Cross — {company}"))
-                heatmap_matrix.loc[ticker, "Golden Cross"] = "✔"
-                st.success(f"🔥 GOLDEN CROSS DETECTED for **{ticker} - {company}**!") # <<< FLASH NOTIFICATION
+                st.success(f"🔥 GOLDEN CROSS DETECTED for **{ticker} - {company}**!")
             
             if "Trend + MACD Bullish" in selected_bullish:
                 if (ma20_1 > ma50_1) and macd_bullish_crossover:
                     signals.append((ticker, "bullish", f"✨ Bullish - Trend + MACD Confirmed — {company}"))
-                    heatmap_matrix.loc[ticker, "Trend + MACD Bullish"] = "✔"
 
             # Ichimoku Strategies
             last_close = df['Close'].iloc[-1].item()
@@ -224,33 +201,27 @@ with st.spinner("⚙️ Processing data and generating signals..."):
 
             if "Ichimoku Bullish" in selected_bullish and (last_close > last_senkou_a) and (last_close > last_senkou_b):
                  signals.append((ticker, "bullish", f"☁️ Bullish - Ichimoku Cloud Breakout — {company}"))
-                 heatmap_matrix.loc[ticker, "Ichimoku Bullish"] = "✔"
 
             # Bearish Strategies
             if "RSI Overbought" in selected_bearish and rsi_1 > 70:
                 signals.append((ticker, "bearish", f"📉 Bearish - RSI Overbought — {company} (RSI={rsi_1:.1f})"))
-                heatmap_matrix.loc[ticker, "RSI Overbought"] = f"{rsi_1:.1f}"
 
             if "MACD Bearish Crossover" in selected_bearish and macd_bearish_crossover:
                 signals.append((ticker, "bearish", f"📉 Bearish - MACD Bearish Crossover — {company}"))
-                heatmap_matrix.loc[ticker, "MACD Bearish Crossover"] = "✔"
             
             if "Death Cross" in selected_bearish and death_cross:
                 signals.append((ticker, "bearish", f"💀 Bearish - Death Cross — {company}"))
-                heatmap_matrix.loc[ticker, "Death Cross"] = "✔"
-                st.error(f"🚨 DEATH CROSS DETECTED for **{ticker} - {company}**!") # <<< FLASH NOTIFICATION
+                st.error(f"🚨 DEATH CROSS DETECTED for **{ticker} - {company}**!")
             
             if "Death Cross + RSI Bearish" in selected_bearish:
                 if death_cross and (rsi_1 > 70):
                     signals.append((ticker, "bearish", f"💀 Bearish - Death Cross + RSI Confirmed — {company}"))
-                    heatmap_matrix.loc[ticker, "Death Cross + RSI Bearish"] = "✔"
             
             if "Ichimoku Bearish" in selected_bearish and (last_close < last_senkou_a) and (last_close < last_senkou_b):
                  signals.append((ticker, "bearish", f"☁️ Bearish - Ichimoku Cloud Breakdown — {company}"))
-                 heatmap_matrix.loc[ticker, "Ichimoku Bearish"] = "✔"
 
     else:
-        st.info("⚠️ Please select at least one strategy from the sidebar to generate signals and a heatmap.")
+        st.info("⚠️ Please select at least one strategy from the sidebar to generate signals.")
 
 
 # --- DASHBOARD OVERVIEW TAB ---
@@ -259,12 +230,9 @@ with tab1:
     st.markdown("### 📊 Market Overview")
     kpi_ticker = st.selectbox("Select a Ticker to view KPIs", TICKERS, index=0, key="kpi_select")
     
-    # We always need at least a year of daily data for the KPIs, so we force that
     kpi_df, _ = fetch_and_process_data(kpi_ticker, "1 year")
     
-    # Updated logic for KPI section to prevent errors on insufficient data
     if kpi_df is not None and not kpi_df.empty and len(kpi_df) >= 2:
-        # Explicitly get the scalar value using .item() to avoid ValueError
         latest_price = kpi_df['Close'].iloc[-1].item()
         previous_price = kpi_df['Close'].iloc[-2].item()
         current_volume = kpi_df['Volume'].iloc[-1].item()
@@ -275,7 +243,6 @@ with tab1:
         if not pd.isna(latest_price) and not pd.isna(previous_price):
             change_pct = ((latest_price - previous_price) / previous_price) * 100
             
-            # Reordered columns to group related metrics
             col1, col2, col3, col4 = st.columns(4)
             with col1:
                 st.metric(label=f"Price ({kpi_ticker})", value=f"${latest_price:.2f}", delta=f"{change_pct:.2f}%")
@@ -299,114 +266,12 @@ with tab1:
                 st.success(msg)
             elif signal_type == "bearish":
                 st.error(msg)
-    elif selected_bullish or selected_bearish: # Only show this if strategies are selected
+    elif selected_bullish or selected_bearish:
         st.info("No trade signals at this time for any active strategies.")
     else:
         st.info("Please select strategies from the sidebar to see current trade signals.")
     
     st.markdown("---")
-    
-    # --- Heatmap Matrix + Visual ---
-    # NEW: Only create the heatmap if the DataFrame exists
-    if heatmap_matrix is not None:
-        st.markdown("### 🧭 Strategy Signal Matrix")
-        
-        # Create a display DataFrame with full company names for the `st.dataframe` table
-        display_matrix = heatmap_matrix.copy()
-        display_matrix.index = [f"{ticker} — {TICKER_NAMES.get(ticker, ticker)}" for ticker in display_matrix.index]
-        
-        def to_numeric_signal(val):
-            return 1 if val != "" else 0
-
-        numeric_heatmap_df = display_matrix[selected_bullish + selected_bearish].applymap(to_numeric_signal)
-        display_matrix["Bullish Total"] = numeric_heatmap_df[selected_bullish].sum(axis=1)
-        display_matrix["Bearish Total"] = numeric_heatmap_df[selected_bearish].sum(axis=1)
-
-        ordered_cols = selected_bullish + ["Bullish Total"] + selected_bearish + ["Bearish Total"]
-        display_matrix = display_matrix[ordered_cols]
-
-        # --- NEW Style function to highlight both non-zero totals ---
-        def highlight_total_signals_v2(row):
-            styles = [''] * len(row)
-            bullish_total = row["Bullish Total"]
-            bearish_total = row["Bearish Total"]
-            
-            try:
-                bullish_total_idx = ordered_cols.index("Bullish Total")
-            except ValueError:
-                bullish_total_idx = len(selected_bullish)
-            
-            try:
-                bearish_total_idx = ordered_cols.index("Bearish Total")
-            except ValueError:
-                bearish_total_idx = len(ordered_cols)
-            
-            # Apply green highlight if bullish total is greater than 0
-            if bullish_total > 0:
-                styles[bullish_total_idx] = 'background-color: #d4edda; color: #155724;' # Light green
-            
-            # Apply red highlight if bearish total is greater than 0
-            if bearish_total > 0:
-                styles[bearish_total_idx] = 'background-color: #f8d7da; color: #721c24;' # Light red
-            
-            return styles
-            
-        st.dataframe(
-            display_matrix.style
-            .apply(highlight_total_signals_v2, axis=1) # Use the new function
-            .set_table_styles([
-                {'selector': 'th', 'props': [('background-color', '#f0f2f6')]},
-                {'selector': '.st-table', 'props': [('width', '100%')]}
-            ]),
-            use_container_width=True
-        )
-
-        st.markdown("### 🔥 Strategy Activation Heatmap")
-
-        # Create a numerical matrix for coloring
-        color_data = []
-        for index, row in heatmap_matrix.iterrows():
-            row_colors = []
-            for col in heatmap_matrix.columns:
-                val = row[col]
-                if val != "":
-                    if col in all_bullish_strategies:
-                        row_colors.append(1) # Bullish -> Green
-                    elif col in all_bearish_strategies:
-                        row_colors.append(-1) # Bearish -> Red
-                    else:
-                        row_colors.append(0) # Should not happen, but for safety
-                else:
-                    row_colors.append(0) # No signal -> Neutral
-            color_data.append(row_colors)
-
-        # Create a single Plotly figure with a heatmap
-        fig = go.Figure(go.Heatmap(
-            z=color_data,
-            x=heatmap_matrix.columns,
-            y=[f"{ticker} — {TICKER_NAMES.get(ticker, ticker)}" for ticker in heatmap_matrix.index],
-            text=heatmap_matrix.values,
-            texttemplate="%{text}",
-            textfont={"size": 12},
-            colorscale=[[0, 'lightcoral'], [0.5, 'white'], [1, 'lightgreen']],
-            zmin=-1, zmax=1,
-            line=dict(color='rgba(0, 0, 0, 0.2)', width=1),
-            xgap=1, ygap=1
-        ))
-
-        fig.update_layout(
-            title="Strategy Activation Heatmap",
-            xaxis_title="Strategy",
-            yaxis_title="Ticker",
-            yaxis={'autorange': 'reversed'},
-            xaxis={'side': 'top'},
-            margin=dict(t=50, b=50, l=50, r=50),
-            autosize=True
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("The Strategy Signal Matrix is currently empty. Please select strategies from the sidebar to view the data.") # <--- NEW MESSAGE
 
 # --- CHART ANALYSIS TAB ---
 with tab2:
@@ -417,7 +282,6 @@ with tab2:
         chart_df, error_msg = fetch_and_process_data(chart_ticker, timeframe)
         
         if chart_df is not None and not chart_df.empty:
-            # Create candlestick chart with MAs
             fig_candlestick = go.Figure(data=[
                 go.Candlestick(
                     x=chart_df.index,
@@ -440,7 +304,6 @@ with tab2:
             
             st.plotly_chart(fig_candlestick, use_container_width=True)
 
-            # Create Ichimoku Cloud chart
             fig_ichimoku = go.Figure(data=[
                 go.Candlestick(
                     x=chart_df.index,
