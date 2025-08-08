@@ -32,6 +32,9 @@ TICKER_NAMES = {
 st.set_page_config(layout="wide")
 st.title("📈 Real-Time Trading Dashboard")
 
+# --- Tabs for navigation ---
+tab1, tab2 = st.tabs(["Dashboard Overview", "Chart Analysis"])
+
 # --- Sidebar Options ---
 st.sidebar.header("Dashboard Settings")
 refresh_rate = st.sidebar.slider("Refresh every N seconds", min_value=10, max_value=300, value=30, step=10)
