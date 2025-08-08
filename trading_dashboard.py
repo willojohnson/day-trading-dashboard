@@ -268,30 +268,28 @@ with tab1:
         ordered_cols = all_bullish_strategies + ["Bullish Total"] + all_bearish_strategies + ["Bearish Total"]
         display_matrix = display_matrix[ordered_cols]
 
-        # --- Style function to highlight the dominant total signal ---
-        def highlight_total_signals(row):
-            # Initialize a list of empty styles for each column
+        # --- NEW Style function to highlight both non-zero totals ---
+        def highlight_total_signals_v2(row):
             styles = [''] * len(row)
-            
             bullish_total = row["Bullish Total"]
             bearish_total = row["Bearish Total"]
             
-            # Find the indices of the 'Total' columns based on the ordered_cols list
             bullish_total_idx = len(all_bullish_strategies)
             bearish_total_idx = len(all_bullish_strategies) + len(all_bearish_strategies) + 1
             
-            # Check for a dominant signal.
-            # If totals are equal (e.g., 1 and 1), neither will be highlighted, which is a neutral state.
-            if bullish_total > bearish_total:
+            # Apply green highlight if bullish total is greater than 0
+            if bullish_total > 0:
                 styles[bullish_total_idx] = 'background-color: #d4edda; color: #155724;' # Light green
-            elif bearish_total > bullish_total:
+            
+            # Apply red highlight if bearish total is greater than 0
+            if bearish_total > 0:
                 styles[bearish_total_idx] = 'background-color: #f8d7da; color: #721c24;' # Light red
             
             return styles
             
         st.dataframe(
             display_matrix.style
-            .apply(highlight_total_signals, axis=1)
+            .apply(highlight_total_signals_v2, axis=1) # Use the new function
             .set_table_styles([
                 {'selector': 'th', 'props': [('background-color', '#f0f2f6')]},
                 {'selector': '.st-table', 'props': [('width', '100%')]}
