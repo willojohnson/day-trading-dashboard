@@ -4,7 +4,7 @@ import pandas as pd
 import datetime
 from streamlit_autorefresh import st_autorefresh
 import plotly.express as px
-import plotly.graph_objects as go # New import for candlestick chart
+import plotly.graph_objects as go
 
 # --- Tickers to Monitor ---
 TICKERS = ["NVDA", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP", "TSM", "DDOG", "BTSG"]
@@ -268,19 +268,25 @@ with tab1:
         ordered_cols = all_bullish_strategies + ["Bullish Total"] + all_bearish_strategies + ["Bearish Total"]
         display_matrix = display_matrix[ordered_cols]
 
+        # --- Style function to highlight the dominant total signal ---
         def highlight_total_signals(row):
+            # Initialize a list of empty styles for each column
             styles = [''] * len(row)
+            
             bullish_total = row["Bullish Total"]
             bearish_total = row["Bearish Total"]
             
-            # The indices are relative to the ordered_cols list
+            # Find the indices of the 'Total' columns based on the ordered_cols list
             bullish_total_idx = len(all_bullish_strategies)
             bearish_total_idx = len(all_bullish_strategies) + len(all_bearish_strategies) + 1
             
-            if bullish_total > 0 and bullish_total > bearish_total:
-                styles[bullish_total_idx] = 'background-color: #d4edda; color: #155724;' # Light green for bullish
-            elif bearish_total > 0 and bearish_total > bullish_total:
-                styles[bearish_total_idx] = 'background-color: #f8d7da; color: #721c24;' # Light red for bearish
+            # Check for a dominant signal.
+            # If totals are equal (e.g., 1 and 1), neither will be highlighted, which is a neutral state.
+            if bullish_total > bearish_total:
+                styles[bullish_total_idx] = 'background-color: #d4edda; color: #155724;' # Light green
+            elif bearish_total > bullish_total:
+                styles[bearish_total_idx] = 'background-color: #f8d7da; color: #721c24;' # Light red
+            
             return styles
             
         st.dataframe(
@@ -330,7 +336,7 @@ with tab1:
             title="Strategy Activation Heatmap",
             xaxis_title="Strategy",
             yaxis_title="Ticker",
-            yaxis={'autorange': 'reversed'},  # <<< FIX: Align y-axis order
+            yaxis={'autorange': 'reversed'},
             xaxis={'side': 'top'},
             margin=dict(t=50, b=50, l=50, r=50),
             autosize=True
