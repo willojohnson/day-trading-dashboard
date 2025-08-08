@@ -73,9 +73,6 @@ with st.sidebar.expander("📘 Strategy Definitions"):
     st.markdown("**Death Cross + RSI Bearish**: 50MA < 200MA AND RSI > 70")
 
 
-# --- Tabs for Content Organization ---
-tab1, tab2 = st.tabs(["📊 Dashboard Overview", "📈 Chart Analysis"])
-
 # --- Helper function for fetching and processing data ---
 @st.cache_data(ttl=refresh_rate)
 def fetch_and_process_data(ticker, timeframe):
@@ -370,7 +367,9 @@ with tab1:
             textfont={"size": 12},
             colorscale=[[0, 'lightcoral'], [0.5, 'white'], [1, 'lightgreen']],
             zmin=-1, zmax=1,
-            xgap=5, ygap=5 # Adjusted to make gridlines more prominent
+            # This is the key change: adding a visible line around each cell
+            line=dict(color='rgba(0, 0, 0, 0.2)', width=1), # Adjusted to a light gray color
+            xgap=1, ygap=1
         ))
 
         # This line forces the y-axis to match the top-to-bottom order of the table
