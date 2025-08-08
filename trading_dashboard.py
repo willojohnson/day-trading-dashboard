@@ -38,8 +38,8 @@ refresh_rate = st.sidebar.slider("Refresh every N seconds", min_value=10, max_va
 st_autorefresh(interval=refresh_rate * 1000, key="autorefresh")
 
 # --- Interactive Strategy Selectors ---
-all_bullish_strategies = ["Trend Trading", "MACD Bullish Crossover", "RSI Oversold", "Golden Cross", "Trend + MACD Bullish"]
-all_bearish_strategies = ["MACD Bearish Crossover", "RSI Overbought", "Death Cross", "Death Cross + RSI Bearish"]
+all_bullish_strategies = ["Trend Trading", "MACD Bullish Crossover", "RSI Oversold", "Golden Cross", "Trend + MACD Bullish", "Ichimoku Bullish"]
+all_bearish_strategies = ["MACD Bearish Crossover", "RSI Overbought", "Death Cross", "Death Cross + RSI Bearish", "Ichimoku Bearish"]
 
 st.sidebar.markdown("### 🚦 Select Strategies")
 selected_bullish = st.sidebar.multiselect("Bullish Strategies", all_bullish_strategies, default=all_bullish_strategies)
@@ -59,6 +59,8 @@ with st.sidebar.expander("📘 Strategy Definitions"):
     st.markdown("**MACD Bearish Crossover**: MACD crosses below Signal")
     st.markdown("**Death Cross**: 50MA crosses below 200MA")
     st.markdown("**Golden Cross**: 50MA crosses above 200MA")
+    st.markdown("**Ichimoku Bullish**: Price > Cloud")
+    st.markdown("**Ichimoku Bearish**: Price < Cloud")
     st.markdown("---")
     st.markdown("**Trend + MACD Bullish**: 20MA > 50MA AND MACD Bullish Crossover")
     st.markdown("**Death Cross + RSI Bearish**: 50MA < 200MA AND RSI > 70")
@@ -120,6 +122,28 @@ def fetch_and_process_data(ticker, timeframe):
     df['MACD'] = exp1 - exp2
     df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
 
+    # --- Ichimoku Cloud Calculations ---
+    # Conversion Line (Tenkan-sen): (Highest High + Lowest Low) / 2 for the past 9 periods
+    high_9 = df['High'].rolling(window=9).max()
+    low_9 = df['Low'].rolling(window=9).min()
+    df['tenkan_sen'] = (high_9 + low_9) / 2
+    
+    # Base Line (Kijun-sen): (Highest High + Lowest Low) / 2 for the past 26 periods
+    high_26 = df['High'].rolling(window=26).max()
+    low_26 = df['Low'].rolling(window=26).min()
+    df['kijun_sen'] = (high_26 + low_26) / 2
+
+    # Leading Span A (Senkou Span A): (Conversion Line + Base Line) / 2
+    df['senkou_span_a'] = ((df['tenkan_sen'] + df['kijun_sen']) / 2).shift(26)
+    
+    # Leading Span B (Senkou Span B): (Highest High + Lowest Low) / 2 for the past 52 periods
+    high_52 = df['High'].rolling(window=52).max()
+    low_52 = df['Low'].rolling(window=52).min()
+    df['senkou_span_b'] = ((high_52 + low_52) / 2).shift(26)
+
+    # Lagging Span (Chikou Span): Close price plotted 26 periods behind
+    df['chikou_span'] = df['Close'].shift(-26)
+
     return df, None
 
 # --- Main Logic ---
@@ -179,6 +203,15 @@ with st.spinner("⚙️ Processing data and generating signals..."):
                 signals.append((ticker, "bullish", f"✨ Bullish - Trend + MACD Confirmed — {company}"))
                 heatmap_matrix.loc[ticker, "Trend + MACD Bullish"] = "✔"
 
+        # Ichimoku Strategies
+        last_close = df['Close'].iloc[-1]
+        last_senkou_a = df['senkou_span_a'].iloc[-1]
+        last_senkou_b = df['senkou_span_b'].iloc[-1]
+
+        if "Ichimoku Bullish" in selected_bullish and (last_close > last_senkou_a) and (last_close > last_senkou_b):
+             signals.append((ticker, "bullish", f"☁️ Bullish - Ichimoku Cloud Breakout — {company}"))
+             heatmap_matrix.loc[ticker, "Ichimoku Bullish"] = "✔"
+
         # Bearish Strategies
         if "RSI Overbought" in selected_bearish and rsi_1 > 70:
             signals.append((ticker, "bearish", f"📉 Bearish - RSI Overbought — {company} (RSI={rsi_1:.1f})"))
@@ -197,6 +230,10 @@ with st.spinner("⚙️ Processing data and generating signals..."):
             if death_cross and (rsi_1 > 70):
                 signals.append((ticker, "bearish", f"💀 Bearish - Death Cross + RSI Confirmed — {company}"))
                 heatmap_matrix.loc[ticker, "Death Cross + RSI Bearish"] = "✔"
+        
+        if "Ichimoku Bearish" in selected_bearish and (last_close < last_senkou_a) and (last_close < last_senkou_b):
+             signals.append((ticker, "bearish", f"☁️ Bearish - Ichimoku Cloud Breakdown — {company}"))
+             heatmap_matrix.loc[ticker, "Ichimoku Bearish"] = "✔"
 
 
 # --- DASHBOARD OVERVIEW TAB ---
@@ -351,7 +388,7 @@ with tab2:
         chart_df, error_msg = fetch_and_process_data(chart_ticker, timeframe)
         
         if chart_df is not None and not chart_df.empty:
-            # Create candlestick chart
+            # Create candlestick chart with MAs
             fig_candlestick = go.Figure(data=[
                 go.Candlestick(
                     x=chart_df.index,
@@ -367,12 +404,52 @@ with tab2:
             ])
             
             fig_candlestick.update_layout(
-                title=f"{TICKER_NAMES.get(chart_ticker, chart_ticker)} Price Action ({timeframe} interval)",
+                title=f"{TICKER_NAMES.get(chart_ticker, chart_ticker)} Price Action (Moving Averages)",
                 xaxis_rangeslider_visible=False,
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
             
             st.plotly_chart(fig_candlestick, use_container_width=True)
+
+            # Create Ichimoku Cloud chart
+            fig_ichimoku = go.Figure(data=[
+                go.Candlestick(
+                    x=chart_df.index,
+                    open=chart_df['Open'],
+                    high=chart_df['High'],
+                    low=chart_df['Low'],
+                    close=chart_df['Close'],
+                    name='Price'
+                ),
+                go.Scatter(x=chart_df.index, y=chart_df['tenkan_sen'], mode='lines', name='Tenkan-sen', line=dict(color='red', width=1)),
+                go.Scatter(x=chart_df.index, y=chart_df['kijun_sen'], mode='lines', name='Kijun-sen', line=dict(color='blue', width=1)),
+                go.Scatter(x=chart_df.index, y=chart_df['chikou_span'], mode='lines', name='Chikou Span', line=dict(color='green', width=1)),
+                go.Scatter(
+                    x=chart_df.index,
+                    y=chart_df['senkou_span_a'],
+                    fill=None,
+                    mode='lines',
+                    line=dict(color='rgba(0,0,0,0)'),
+                    name='Cloud'
+                ),
+                go.Scatter(
+                    x=chart_df.index,
+                    y=chart_df['senkou_span_b'],
+                    fill='tonexty',
+                    mode='lines',
+                    line=dict(color='rgba(0,0,0,0)'),
+                    fillcolor='rgba(255, 0, 0, 0.2)' if chart_df['senkou_span_a'].iloc[-1] > chart_df['senkou_span_b'].iloc[-1] else 'rgba(0, 255, 0, 0.2)',
+                    name='Cloud Fill'
+                )
+            ])
+
+            fig_ichimoku.update_layout(
+                title=f"{TICKER_NAMES.get(chart_ticker, chart_ticker)} Ichimoku Cloud ({timeframe} interval)",
+                xaxis_rangeslider_visible=False,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+
+            st.plotly_chart(fig_ichimoku, use_container_width=True)
 
         else:
             st.warning(f"⚠️ No data available for {chart_ticker} at the selected timeframe.")
