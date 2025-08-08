@@ -250,9 +250,9 @@ with tab1:
     
     st.markdown("---")
     
-    # --- Strategy Activation Heatmap (Grid Table) ---
+    # --- Heatmap Matrix + Visual ---
     if not heatmap_matrix.empty:
-        st.markdown("### 🧭 Strategy Activation Heatmap")
+        st.markdown("### 🧭 Strategy Signal Matrix")
         
         # Create a display DataFrame with full company names for the `st.dataframe` table
         display_matrix = heatmap_matrix.copy()
@@ -268,39 +268,73 @@ with tab1:
         ordered_cols = all_bullish_strategies + ["Bullish Total"] + all_bearish_strategies + ["Bearish Total"]
         display_matrix = display_matrix[ordered_cols]
 
-        def highlight_cells_and_totals(row):
+        def highlight_total_signals(row):
             styles = [''] * len(row)
-            
-            # Apply styling to individual strategy cells
-            for i, col in enumerate(all_bullish_strategies):
-                if row[col] != '':
-                    styles[i] = 'background-color: #d4edda; color: #155724; font-weight: bold;'
-            for i, col in enumerate(all_bearish_strategies, start=len(all_bullish_strategies) + 1):
-                if row[col] != '':
-                    styles[i] = 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
-            
-            # Apply styling to total columns
             bullish_total = row["Bullish Total"]
             bearish_total = row["Bearish Total"]
+            
+            # The indices are relative to the ordered_cols list
             bullish_total_idx = len(all_bullish_strategies)
             bearish_total_idx = len(all_bullish_strategies) + len(all_bearish_strategies) + 1
-
-            if bullish_total > 0 and bullish_total > bearish_total:
-                styles[bullish_total_idx] = 'background-color: #d4edda; color: #155724; font-weight: bold;'
-            elif bearish_total > 0 and bearish_total > bullish_total:
-                styles[bearish_total_idx] = 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
             
+            if bullish_total > 0 and bullish_total > bearish_total:
+                styles[bullish_total_idx] = 'background-color: #d4edda; color: #155724;' # Light green for bullish
+            elif bearish_total > 0 and bearish_total > bullish_total:
+                styles[bearish_total_idx] = 'background-color: #f8d7da; color: #721c24;' # Light red for bearish
             return styles
             
         st.dataframe(
             display_matrix.style
-            .apply(highlight_cells_and_totals, axis=1)
+            .apply(highlight_total_signals, axis=1)
             .set_table_styles([
                 {'selector': 'th', 'props': [('background-color', '#f0f2f6')]},
                 {'selector': '.st-table', 'props': [('width', '100%')]}
             ]),
             use_container_width=True
         )
+
+        st.markdown("### 🔥 Strategy Activation Heatmap")
+
+        # Create a numerical matrix for coloring
+        color_data = []
+        for index, row in heatmap_matrix.iterrows():
+            row_colors = []
+            for col in heatmap_matrix.columns:
+                val = row[col]
+                if val != "":
+                    if col in all_bullish_strategies:
+                        row_colors.append(1) # Bullish -> Green
+                    elif col in all_bearish_strategies:
+                        row_colors.append(-1) # Bearish -> Red
+                    else:
+                        row_colors.append(0) # Should not happen, but for safety
+                else:
+                    row_colors.append(0) # No signal -> Neutral
+            color_data.append(row_colors)
+
+        # Create a single Plotly figure with a heatmap
+        fig = go.Figure(go.Heatmap(
+            z=color_data,
+            x=heatmap_matrix.columns,
+            y=[f"{ticker} — {TICKER_NAMES.get(ticker, ticker)}" for ticker in heatmap_matrix.index],
+            text=heatmap_matrix.values,
+            texttemplate="%{text}",
+            textfont={"size": 12},
+            colorscale=[[0, 'lightcoral'], [0.5, 'white'], [1, 'lightgreen']],
+            zmin=-1, zmax=1,
+            xgap=1, ygap=1
+        ))
+
+        fig.update_layout(
+            title="Strategy Activation Heatmap",
+            xaxis_title="Strategy",
+            yaxis_title="Ticker",
+            xaxis={'side': 'top'},
+            margin=dict(t=50, b=50, l=50, r=50),
+            autosize=True
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
 
 # --- CHART ANALYSIS TAB ---
 with tab2:
