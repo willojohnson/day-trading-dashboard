@@ -283,7 +283,7 @@ with tab1:
     # --- Strategy Heatmap (Re-implemented with changes) ---
     st.markdown("### 📊 Strategy Heatmap")
     if not heatmap_df.empty:
-        # Create a Plotly figure for the heatmap
+        # Create a Plotly figure for the heatmap with explicit dimensions
         fig_heatmap = go.Figure(data=go.Heatmap(
             z=heatmap_df.values,
             x=heatmap_df.columns,
@@ -304,8 +304,8 @@ with tab1:
             title="Active Signals by Strategy and Ticker",
             xaxis_title="Strategies",
             yaxis_title="Tickers",
-            xaxis=dict(tickmode='array', tickvals=list(range(len(heatmap_df.columns))), ticktext=heatmap_df.columns),
-            yaxis_autorange='reversed'
+            xaxis=dict(tickangle=45), # Angle the labels for readability
+            yaxis=dict(autorange='reversed'), # Ensure tickers are in the correct order
         )
         # Add gridlines to the plot
         fig_heatmap.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(0,0,0,0.2)')
