@@ -93,6 +93,7 @@ def fetch_and_process_data(ticker, timeframe):
     elif timeframe == '3 month':
         start_date = end_date - datetime.timedelta(days=90)
     elif timeframe == '6 month':
+        start_date = end_date - datetime.timedelta(days=180)
     elif timeframe == 'YTD':
         start_date = datetime.datetime(end_date.year, 1, 1)
     elif timeframe == '1 year':
