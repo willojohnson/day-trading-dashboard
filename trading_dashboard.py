@@ -2,9 +2,10 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import datetime
-from streamlit_autorefresh import st_autorefresh
 import plotly.express as px
 import plotly.graph_objects as go
+from streamlit_autorefresh import st_autorefresh
+import numpy as np
 
 # --- Tickers to Monitor ---
 TICKERS = ["NVDA", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP", "TSM", "DDOG", "BTSG"]
@@ -74,7 +75,6 @@ with st.sidebar.expander("📘 Strategy Definitions"):
     st.markdown("**Trend + MACD Bullish**: 20MA > 50MA AND MACD Bullish Crossover")
     st.markdown("**Death Cross + RSI Bearish**: 50MA < 200MA AND RSI > 70")
 
-
 # --- Helper function for fetching and processing data ---
 @st.cache_data(ttl=refresh_rate)
 def fetch_and_process_data(ticker, timeframe):
@@ -113,6 +113,7 @@ def fetch_and_process_data(ticker, timeframe):
     df['50_MA'] = df['Close'].rolling(window=50).mean()
     df['200_MA'] = df['Close'].rolling(window=200).mean()
 
+    # RSI
     delta = df['Close'].diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
@@ -121,12 +122,13 @@ def fetch_and_process_data(ticker, timeframe):
     rs = avg_gain / avg_loss.replace(0, 1e-9)
     df['RSI'] = 100 - (100 / (1 + rs))
 
+    # MACD
     exp1 = df['Close'].ewm(span=12, adjust=False).mean()
     exp2 = df['Close'].ewm(span=26, adjust=False).mean()
     df['MACD'] = exp1 - exp2
     df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
 
-    # --- Ichimoku Cloud Calculations ---
+    # Ichimoku Cloud
     high_9 = df['High'].rolling(window=9).max()
     low_9 = df['Low'].rolling(window=9).min()
     df['tenkan_sen'] = (high_9 + low_9) / 2
@@ -147,6 +149,7 @@ def fetch_and_process_data(ticker, timeframe):
 
 # --- Main Logic ---
 signals = []
+heatmap_data = []
 
 with st.spinner("⚙️ Processing data and generating signals..."):
     if selected_bullish or selected_bearish:
@@ -179,49 +182,128 @@ with st.spinner("⚙️ Processing data and generating signals..."):
             # Bullish Strategies
             if "Trend Trading" in selected_bullish and ma20_1 > ma50_1:
                 signals.append((ticker, "bullish", f"📈 Bullish - Trend Trading — {company}"))
+                heatmap_data.append({"ticker": ticker, "strategy": "Trend Trading", "signal": 1})
+            else:
+                heatmap_data.append({"ticker": ticker, "strategy": "Trend Trading", "signal": 0})
 
             if "RSI Oversold" in selected_bullish and rsi_1 < 30:
                 signals.append((ticker, "bullish", f"📈 Bullish - RSI Oversold — {company} (RSI={rsi_1:.1f})"))
+                heatmap_data.append({"ticker": ticker, "strategy": "RSI Oversold", "signal": 1})
+            else:
+                heatmap_data.append({"ticker": ticker, "strategy": "RSI Oversold", "signal": 0})
 
             if "MACD Bullish Crossover" in selected_bullish and macd_bullish_crossover:
                 signals.append((ticker, "bullish", f"📈 Bullish - MACD Bullish Crossover — {company}"))
+                heatmap_data.append({"ticker": ticker, "strategy": "MACD Bullish Crossover", "signal": 1})
+            else:
+                heatmap_data.append({"ticker": ticker, "strategy": "MACD Bullish Crossover", "signal": 0})
             
             if "Golden Cross" in selected_bullish and golden_cross:
                 signals.append((ticker, "bullish", f"✨ Bullish - Golden Cross — {company}"))
                 st.success(f"🔥 GOLDEN CROSS DETECTED for **{ticker} - {company}**!")
+                heatmap_data.append({"ticker": ticker, "strategy": "Golden Cross", "signal": 1})
+            else:
+                heatmap_data.append({"ticker": ticker, "strategy": "Golden Cross", "signal": 0})
             
             if "Trend + MACD Bullish" in selected_bullish:
                 if (ma20_1 > ma50_1) and macd_bullish_crossover:
                     signals.append((ticker, "bullish", f"✨ Bullish - Trend + MACD Confirmed — {company}"))
-
+                    heatmap_data.append({"ticker": ticker, "strategy": "Trend + MACD Bullish", "signal": 1})
+                else:
+                    heatmap_data.append({"ticker": ticker, "strategy": "Trend + MACD Bullish", "signal": 0})
+            
             # Ichimoku Strategies
             last_close = df['Close'].iloc[-1].item()
             last_senkou_a = df['senkou_span_a'].iloc[-1].item()
             last_senkou_b = df['senkou_span_b'].iloc[-1].item()
-
+            
             if "Ichimoku Bullish" in selected_bullish and (last_close > last_senkou_a) and (last_close > last_senkou_b):
                  signals.append((ticker, "bullish", f"☁️ Bullish - Ichimoku Cloud Breakout — {company}"))
+                 heatmap_data.append({"ticker": ticker, "strategy": "Ichimoku Bullish", "signal": 1})
+            else:
+                 heatmap_data.append({"ticker": ticker, "strategy": "Ichimoku Bullish", "signal": 0})
 
             # Bearish Strategies
             if "RSI Overbought" in selected_bearish and rsi_1 > 70:
                 signals.append((ticker, "bearish", f"📉 Bearish - RSI Overbought — {company} (RSI={rsi_1:.1f})"))
+                heatmap_data.append({"ticker": ticker, "strategy": "RSI Overbought", "signal": -1})
+            else:
+                heatmap_data.append({"ticker": ticker, "strategy": "RSI Overbought", "signal": 0})
 
             if "MACD Bearish Crossover" in selected_bearish and macd_bearish_crossover:
                 signals.append((ticker, "bearish", f"📉 Bearish - MACD Bearish Crossover — {company}"))
+                heatmap_data.append({"ticker": ticker, "strategy": "MACD Bearish Crossover", "signal": -1})
+            else:
+                heatmap_data.append({"ticker": ticker, "strategy": "MACD Bearish Crossover", "signal": 0})
             
             if "Death Cross" in selected_bearish and death_cross:
                 signals.append((ticker, "bearish", f"💀 Bearish - Death Cross — {company}"))
                 st.error(f"🚨 DEATH CROSS DETECTED for **{ticker} - {company}**!")
+                heatmap_data.append({"ticker": ticker, "strategy": "Death Cross", "signal": -1})
+            else:
+                heatmap_data.append({"ticker": ticker, "strategy": "Death Cross", "signal": 0})
             
             if "Death Cross + RSI Bearish" in selected_bearish:
                 if death_cross and (rsi_1 > 70):
                     signals.append((ticker, "bearish", f"💀 Bearish - Death Cross + RSI Confirmed — {company}"))
+                    heatmap_data.append({"ticker": ticker, "strategy": "Death Cross + RSI Bearish", "signal": -1})
+                else:
+                    heatmap_data.append({"ticker": ticker, "strategy": "Death Cross + RSI Bearish", "signal": 0})
             
             if "Ichimoku Bearish" in selected_bearish and (last_close < last_senkou_a) and (last_close < last_senkou_b):
                  signals.append((ticker, "bearish", f"☁️ Bearish - Ichimoku Cloud Breakdown — {company}"))
+                 heatmap_data.append({"ticker": ticker, "strategy": "Ichimoku Bearish", "signal": -1})
+            else:
+                 heatmap_data.append({"ticker": ticker, "strategy": "Ichimoku Bearish", "signal": 0})
 
     else:
         st.info("⚠️ Please select at least one strategy from the sidebar to generate signals.")
+
+# --- Prepare heatmap data ---
+heatmap_df = pd.DataFrame(heatmap_data)
+if not heatmap_df.empty:
+    heatmap_pivot = heatmap_df.pivot_table(index="strategy", columns="ticker", values="signal", aggfunc="sum").fillna(0)
+    strategies_order = all_bullish_strategies + all_bearish_strategies
+    heatmap_pivot = heatmap_pivot.reindex(strategies_order).fillna(0)
+    
+    # Custom color scale
+    # Colors: Red for bearish, Green for bullish, White for no signal
+    colorscale = [[0, 'rgb(255, 0, 0)'], [0.5, 'rgb(255, 255, 255)'], [1, 'rgb(0, 128, 0)']]
+    
+    # Custom text to show on hover
+    hover_text = []
+    for i in range(len(heatmap_pivot.index)):
+        hover_text.append(list(heatmap_pivot.columns))
+    
+    for i, row in enumerate(heatmap_pivot.iterrows()):
+        for j, val in enumerate(row[1]):
+            if val == 1:
+                hover_text[i][j] = f"{row[0]} - Bullish Signal"
+            elif val == -1:
+                hover_text[i][j] = f"{row[0]} - Bearish Signal"
+            else:
+                hover_text[i][j] = f"{row[0]} - No Signal"
+
+    fig_heatmap = go.Figure(data=go.Heatmap(
+        z=heatmap_pivot.values,
+        x=heatmap_pivot.columns,
+        y=heatmap_pivot.index,
+        colorscale=colorscale,
+        zmin=-1,
+        zmax=1,
+        text=hover_text,
+        hoverinfo="text"
+    ))
+    
+    fig_heatmap.update_layout(
+        title='Strategy Heatmap',
+        xaxis_title='Tickers',
+        yaxis_title='Strategies',
+        xaxis_showgrid=False,
+        yaxis_showgrid=False,
+        width=1200,
+        height=600
+    )
 
 
 # --- DASHBOARD OVERVIEW TAB ---
@@ -257,6 +339,12 @@ with tab1:
     else:
         st.warning(f"⚠️ Insufficient data for {kpi_ticker} to calculate KPIs. Please check back later.")
 
+    # --- Heatmap Display ---
+    st.markdown("### 🗺️ Strategy Heatmap")
+    if 'fig_heatmap' in locals() and not heatmap_pivot.empty:
+        st.plotly_chart(fig_heatmap, use_container_width=True)
+    else:
+        st.info("No data available to generate the heatmap. Please check your selected tickers and timeframe.")
 
     # --- Signal Display ---
     st.markdown("### ✅ Current Trade Signals")
