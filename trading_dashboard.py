@@ -2,10 +2,8 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import datetime
-import plotly.express as px
 import plotly.graph_objects as go
 from streamlit_autorefresh import st_autorefresh
-import numpy as np
 
 # --- Tickers to Monitor ---
 TICKERS = ["NVDA", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "SNOW", "AI", "AMD", "BBAI", "SOUN", "CRSP", "TSM", "DDOG", "BTSG"]
@@ -54,27 +52,27 @@ selected_bearish = st.sidebar.multiselect("Bearish Strategies", all_bearish_stra
 timeframe_options = ["5m", "15m", "30m", "1h", "1d", "3 month", "6 month", "YTD", "1 year", "5 year"]
 timeframe = st.sidebar.selectbox("Select Timeframe", timeframe_options, index=4)
 
-# --- Strategy Definitions (in a collapsible expander) ---
-with st.sidebar.expander("📘 Strategy Definitions", expanded=True):
-    st.markdown("**Trend Trading**: 20MA > 50MA")
-    st.markdown("**RSI Overbought**: RSI > 70")
-    st.markdown("**RSI Oversold**: RSI < 30")
-    st.markdown("**MACD Bullish Crossover**: MACD crosses above Signal")
-    st.markdown("**MACD Bearish Crossover**: MACD crosses below Signal")
-    st.markdown("**Death Cross**: 50MA crosses below 200MA")
-    st.markdown("**Golden Cross**: 50MA crosses above 200MA")
-    st.markdown("---")
-    st.markdown("### Ichimoku Cloud (Ichimoku Kinko Hyo)")
-    st.markdown("- **Tenkan-sen (Conversion Line)**: The average of the highest high and lowest low over the past 9 periods. Represents short-term momentum.")
-    st.markdown("- **Kijun-sen (Base Line)**: The average of the highest high and lowest low over the past 26 periods. Represents long-term momentum.")
-    st.markdown("- **Senkou Span A (Leading Span A)**: The average of the Tenkan-sen and Kijun-sen, plotted 26 periods ahead. One boundary of the Ichimoku cloud.")
-    st.markdown("- **Senkou Span B (Leading Span B)**: The average of the highest high and lowest low over the past 52 periods, plotted 26 periods ahead. The other boundary of the Ichimoku cloud.")
-    st.markdown("- **Chikou Span (Lagging Span)**: The current closing price, plotted 26 periods behind.")
-    st.markdown("- **Ichimoku Bullish**: Price is above the cloud (Senkou Span A and B).")
-    st.markdown("- **Ichimoku Bearish**: Price is below the cloud (Senkou Span A and B).")
-    st.markdown("---")
-    st.markdown("**Trend + MACD Bullish**: 20MA > 50MA AND MACD Bullish Crossover")
-    st.markdown("**Death Cross + RSI Bearish**: 50MA < 200MA AND RSI > 70")
+# --- Strategy Definitions (now always visible) ---
+st.sidebar.markdown("### 📘 Strategy Definitions")
+st.sidebar.markdown("**Trend Trading**: 20MA > 50MA")
+st.sidebar.markdown("**RSI Overbought**: RSI > 70")
+st.sidebar.markdown("**RSI Oversold**: RSI < 30")
+st.sidebar.markdown("**MACD Bullish Crossover**: MACD crosses above Signal")
+st.sidebar.markdown("**MACD Bearish Crossover**: MACD crosses below Signal")
+st.sidebar.markdown("**Death Cross**: 50MA crosses below 200MA")
+st.sidebar.markdown("**Golden Cross**: 50MA crosses above 200MA")
+st.sidebar.markdown("---")
+st.sidebar.markdown("### Ichimoku Cloud (Ichimoku Kinko Hyo)")
+st.sidebar.markdown("- **Tenkan-sen (Conversion Line)**: The average of the highest high and lowest low over the past 9 periods. Represents short-term momentum.")
+st.sidebar.markdown("- **Kijun-sen (Base Line)**: The average of the highest high and lowest low over the past 26 periods. Represents long-term momentum.")
+st.sidebar.markdown("- **Senkou Span A (Leading Span A)**: The average of the Tenkan-sen and Kijun-sen, plotted 26 periods ahead. One boundary of the Ichimoku cloud.")
+st.sidebar.markdown("- **Senkou Span B (Leading Span B)**: The average of the highest high and lowest low over the past 52 periods, plotted 26 periods ahead. The other boundary of the Ichimoku cloud.")
+st.sidebar.markdown("- **Chikou Span (Lagging Span)**: The current closing price, plotted 26 periods behind.")
+st.sidebar.markdown("- **Ichimoku Bullish**: Price is above the cloud (Senkou Span A and B).")
+st.sidebar.markdown("- **Ichimoku Bearish**: Price is below the cloud (Senkou Span A and B).")
+st.sidebar.markdown("---")
+st.sidebar.markdown("**Trend + MACD Bullish**: 20MA > 50MA AND MACD Bullish Crossover")
+st.sidebar.markdown("**Death Cross + RSI Bearish**: 50MA < 200MA AND RSI > 70")
 
 # --- Helper function for fetching and processing data ---
 @st.cache_data(ttl=refresh_rate)
@@ -150,9 +148,6 @@ def fetch_and_process_data(ticker, timeframe):
 
 # --- Main Logic ---
 signals = []
-# Create a blank DataFrame with all strategies and tickers, filled with 0.
-heatmap_df = pd.DataFrame(0, index=all_strategies, columns=TICKERS)
-
 with st.spinner("⚙️ Processing data and generating signals..."):
     if selected_bullish or selected_bearish:
         for ticker in TICKERS:
@@ -189,86 +184,33 @@ with st.spinner("⚙️ Processing data and generating signals..."):
             # Bullish Strategies
             if "Trend Trading" in selected_bullish and ma20_1 > ma50_1:
                 signals.append((ticker, "bullish", f"📈 Bullish - Trend Trading — {company}"))
-                heatmap_df.loc["Trend Trading", ticker] = 1
             if "RSI Oversold" in selected_bullish and rsi_1 < 30:
                 signals.append((ticker, "bullish", f"📈 Bullish - RSI Oversold — {company} (RSI={rsi_1:.1f})"))
-                heatmap_df.loc["RSI Oversold", ticker] = 1
             if "MACD Bullish Crossover" in selected_bullish and macd_bullish_crossover:
                 signals.append((ticker, "bullish", f"📈 Bullish - MACD Bullish Crossover — {company}"))
-                heatmap_df.loc["MACD Bullish Crossover", ticker] = 1
             if "Golden Cross" in selected_bullish and golden_cross:
                 signals.append((ticker, "bullish", f"✨ Bullish - Golden Cross — {company}"))
                 st.success(f"🔥 GOLDEN CROSS DETECTED for **{ticker} - {company}**!")
-                heatmap_df.loc["Golden Cross", ticker] = 1
             if "Trend + MACD Bullish" in selected_bullish and (ma20_1 > ma50_1) and macd_bullish_crossover:
                 signals.append((ticker, "bullish", f"✨ Bullish - Trend + MACD Confirmed — {company}"))
-                heatmap_df.loc["Trend + MACD Bullish", ticker] = 1
             if "Ichimoku Bullish" in selected_bullish and (last_close > last_senkou_a) and (last_close > last_senkou_b):
                  signals.append((ticker, "bullish", f"☁️ Bullish - Ichimoku Cloud Breakout — {company}"))
-                 heatmap_df.loc["Ichimoku Bullish", ticker] = 1
             
             # Bearish Strategies
             if "RSI Overbought" in selected_bearish and rsi_1 > 70:
                 signals.append((ticker, "bearish", f"📉 Bearish - RSI Overbought — {company} (RSI={rsi_1:.1f})"))
-                heatmap_df.loc["RSI Overbought", ticker] = -1
             if "MACD Bearish Crossover" in selected_bearish and macd_bearish_crossover:
                 signals.append((ticker, "bearish", f"📉 Bearish - MACD Bearish Crossover — {company}"))
-                heatmap_df.loc["MACD Bearish Crossover", ticker] = -1
             if "Death Cross" in selected_bearish and death_cross:
                 signals.append((ticker, "bearish", f"💀 Bearish - Death Cross — {company}"))
                 st.error(f"🚨 DEATH CROSS DETECTED for **{ticker} - {company}**!")
-                heatmap_df.loc["Death Cross", ticker] = -1
             if "Death Cross + RSI Bearish" in selected_bearish and death_cross and (rsi_1 > 70):
                 signals.append((ticker, "bearish", f"💀 Bearish - Death Cross + RSI Confirmed — {company}"))
-                heatmap_df.loc["Death Cross + RSI Bearish", ticker] = -1
             if "Ichimoku Bearish" in selected_bearish and (last_close < last_senkou_a) and (last_close < last_senkou_b):
                  signals.append((ticker, "bearish", f"☁️ Bearish - Ichimoku Cloud Breakdown — {company}"))
-                 heatmap_df.loc["Ichimoku Bearish", ticker] = -1
     else:
         st.info("⚠️ Please select at least one strategy from the sidebar to generate signals.")
         
-# --- Prepare heatmap data for plotting ---
-if not heatmap_df.empty:
-    # Custom text to show on hover
-    hover_text = []
-    for strategy in heatmap_df.index:
-        row_text = []
-        for ticker in heatmap_df.columns:
-            signal_value = heatmap_df.loc[strategy, ticker]
-            if signal_value == 1:
-                row_text.append(f"{strategy} - Bullish Signal")
-            elif signal_value == -1:
-                row_text.append(f"{strategy} - Bearish Signal")
-            else:
-                row_text.append(f"{strategy} - No Signal")
-        hover_text.append(row_text)
-
-    # Custom color scale
-    # Colors: Red for bearish, Green for bullish, White for no signal
-    colorscale = [[0, 'rgb(255, 0, 0)'], [0.5, 'rgb(255, 255, 255)'], [1, 'rgb(0, 128, 0)']]
-    
-    fig_heatmap = go.Figure(data=go.Heatmap(
-        z=heatmap_df.values,
-        x=heatmap_df.columns,
-        y=heatmap_df.index,
-        colorscale=colorscale,
-        zmin=-1,
-        zmax=1,
-        text=hover_text,
-        hoverinfo="text"
-    ))
-    
-    fig_heatmap.update_layout(
-        title='Strategy Heatmap',
-        xaxis_title='Tickers',
-        yaxis_title='Strategies',
-        xaxis_showgrid=False,
-        yaxis_showgrid=False,
-        width=1200,
-        height=600
-    )
-
-
 # --- DASHBOARD OVERVIEW TAB ---
 with tab1:
     # --- KPI Metrics at the Top ---
@@ -301,13 +243,6 @@ with tab1:
             st.warning(f"⚠️ No recent pricing data for {kpi_ticker} to calculate KPIs. Please check back later.")
     else:
         st.warning(f"⚠️ Insufficient data for {kpi_ticker} to calculate KPIs. Please check back later.")
-
-    # --- Heatmap Display ---
-    st.markdown("### 🗺️ Strategy Heatmap")
-    if 'fig_heatmap' in locals() and not heatmap_df.empty:
-        st.plotly_chart(fig_heatmap, use_container_width=True)
-    else:
-        st.info("No data available to generate the heatmap. Please check your selected tickers and timeframe.")
 
     # --- Signal Display ---
     st.markdown("### ✅ Current Trade Signals")
