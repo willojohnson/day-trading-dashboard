@@ -55,7 +55,7 @@ timeframe_options = ["5m", "15m", "30m", "1h", "1d", "3 month", "6 month", "YTD"
 timeframe = st.sidebar.selectbox("Select Timeframe", timeframe_options, index=4)
 
 # --- Strategy Definitions (in a collapsible expander) ---
-with st.sidebar.expander("📘 Strategy Definitions"):
+with st.sidebar.expander("📘 Strategy Definitions", expanded=True):
     st.markdown("**Trend Trading**: 20MA > 50MA")
     st.markdown("**RSI Overbought**: RSI > 70")
     st.markdown("**RSI Oversold**: RSI < 30")
@@ -150,8 +150,8 @@ def fetch_and_process_data(ticker, timeframe):
 
 # --- Main Logic ---
 signals = []
-# Initialize a DataFrame with all combinations of strategies and tickers, filled with 0s.
-heatmap_df = pd.DataFrame(index=all_strategies, columns=TICKERS, dtype=np.int64).fillna(0)
+# Create a blank DataFrame with all strategies and tickers, filled with 0.
+heatmap_df = pd.DataFrame(0, index=all_strategies, columns=TICKERS)
 
 with st.spinner("⚙️ Processing data and generating signals..."):
     if selected_bullish or selected_bearish:
