@@ -370,7 +370,7 @@ with tab1:
             textfont={"size": 12},
             colorscale=[[0, 'lightcoral'], [0.5, 'white'], [1, 'lightgreen']],
             zmin=-1, zmax=1,
-            xgap=1, ygap=1
+            xgap=5, ygap=5 # Adjusted to make gridlines more prominent
         ))
 
         # This line forces the y-axis to match the top-to-bottom order of the table
