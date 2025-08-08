@@ -279,6 +279,21 @@ with tab1:
         st.warning(f"⚠️ Insufficient data for {kpi_ticker} to calculate KPIs. Please check back later.")
 
     st.markdown("---")
+
+    # --- Signal Display ---
+    st.markdown("### ✅ Current Trade Signals")
+    if signals:
+        for _, signal_type, msg in signals:
+            if signal_type == "bullish":
+                st.success(msg)
+            elif signal_type == "bearish":
+                st.error(msg)
+    elif selected_strategies:
+        st.info("No trade signals at this time for any active strategies.")
+    else:
+        st.info("Please select strategies from the sidebar to see current trade signals.")
+    
+    st.markdown("---")
     
     # --- Strategy Heatmap (Re-implemented with changes) ---
     st.markdown("### 📊 Strategy Heatmap")
@@ -304,9 +319,16 @@ with tab1:
             title="Active Signals by Strategy and Ticker",
             xaxis_title="Strategies",
             yaxis_title="Tickers",
-            xaxis=dict(tickangle=45, type='category', automargin=True),
-            yaxis=dict(autorange='reversed', type='category', automargin=True),
-            height=500, # Setting a fixed height to prevent vertical squashing
+            xaxis=dict(
+                tickangle=45,
+                type='category',
+                constrain='domain'
+            ),
+            yaxis=dict(
+                autorange='reversed',
+                type='category',
+                constrain='domain'
+            ),
             autosize=True
         )
         # Add gridlines to the plot
@@ -315,21 +337,6 @@ with tab1:
 
         st.plotly_chart(fig_heatmap, use_container_width=True)
 
-    st.markdown("---")
-
-    # --- Signal Display ---
-    st.markdown("### ✅ Current Trade Signals")
-    if signals:
-        for _, signal_type, msg in signals:
-            if signal_type == "bullish":
-                st.success(msg)
-            elif signal_type == "bearish":
-                st.error(msg)
-    elif selected_strategies:
-        st.info("No trade signals at this time for any active strategies.")
-    else:
-        st.info("Please select strategies from the sidebar to see current trade signals.")
-    
     st.markdown("---")
 
 # --- CHART ANALYSIS TAB ---
