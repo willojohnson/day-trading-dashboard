@@ -325,10 +325,12 @@ with tab1:
             xgap=1, ygap=1
         ))
 
+        # This line forces the y-axis to match the top-to-bottom order of the table
         fig.update_layout(
             title="Strategy Activation Heatmap",
             xaxis_title="Strategy",
             yaxis_title="Ticker",
+            yaxis={'autorange': 'reversed'},  # <<< FIX: Align y-axis order
             xaxis={'side': 'top'},
             margin=dict(t=50, b=50, l=50, r=50),
             autosize=True
