@@ -7,13 +7,10 @@ import numpy as np
 from streamlit_autorefresh import st_autorefresh
 
 # =============================================================
-# Trading Dashboard – Hotfix
-# - Fix index mapping bug in last_threshold_cross_index (DatetimeIndex -> iloc)
-# - Fix index mapping bug in ichimoku_cross_index (DatetimeIndex -> iloc)
-#   Both now return **positional** indices compatible with .iloc
-# -------------------------------------------------------------
-# This is a drop-in replacement for the previously shared
-# "Trading Dashboard – Rewired (Full Code)" version.
+# Trading Dashboard – Hotfix v2
+# - Fix ambiguous truth on valid.sum() by using numpy array
+# - Ensure ALL cross-index helpers return **positional** indices for .iloc
+# - Keep all prior rewired improvements (RSI re-entry, slope, combo window, ATR filter, etc.)
 # =============================================================
 
 # --- Tickers to Monitor ---
@@ -41,7 +38,7 @@ TICKER_NAMES = {
 }
 
 st.set_page_config(layout="wide")
-st.title("📈 Real-Time Trading Dashboard (Hotfix)")
+st.title("📈 Real-Time Trading Dashboard (Hotfix v2)")
 
 tab1, tab2 = st.tabs(["Dashboard Overview", "Chart Analysis"]) 
 
@@ -160,7 +157,7 @@ def fetch_and_process_data(ticker: str, timeframe: str):
 
     return df, None
 
-# ---------- Helpers (FIXED index mapping) ----------
+# ---------- Helpers (positional indices) ----------
 
 def _nanmask(a: pd.Series, b: pd.Series):
     m = (~a.isna()) & (~b.isna())
@@ -177,12 +174,12 @@ def last_cross_index(series_a: pd.Series, series_b: pd.Series, direction: str):
 
 
 def last_threshold_cross_index(series: pd.Series, thresh: float, mode: str):
-    """mode ∈ {'breach_down','breach_up','reenter_above','reenter_below'} – returns **positional** index"""
+    """mode ∈ {'breach_down','breach_up','reenter_above','reenter_below'} — returns **positional** index"""
     mask = ~series.isna().values
     s = series.values[mask]
     if len(s) < 2:
         return None
-    posmap = np.where(mask)[0]  # positional indices back to original series
+    posmap = np.where(mask)[0]
     if mode == 'breach_down':
         cross = (s[:-1] >= thresh) & (s[1:] < thresh)
     elif mode == 'breach_up':
@@ -198,12 +195,13 @@ def last_threshold_cross_index(series: pd.Series, thresh: float, mode: str):
 def ichimoku_cross_index(df: pd.DataFrame, direction: str, require_color: bool, require_chikou: bool):
     close = df['Close']; a = df['senkou_span_a']; b = df['senkou_span_b']
     valid = (~close.isna()) & (~a.isna()) & (~b.isna())
-    if valid.sum() < 2:
+    valid_np = valid.to_numpy() if hasattr(valid, 'to_numpy') else np.asarray(valid)
+    if valid_np.sum() < 2:
         return None
-    c = close.values[valid.values]
-    A = a.values[valid.values]
-    B = b.values[valid.values]
-    posmap = np.where(valid.values)[0]  # positional indices back to df
+    c = close.values[valid_np]
+    A = a.values[valid_np]
+    B = b.values[valid_np]
+    posmap = np.where(valid_np)[0]
 
     cloud_top_prev = np.maximum(A[:-1], B[:-1])
     cloud_top_now  = np.maximum(A[1:],  B[1:])
@@ -217,9 +215,8 @@ def ichimoku_cross_index(df: pd.DataFrame, direction: str, require_color: bool, 
     if not idxs.size:
         return None
 
-    # Validate most‑recent first
     for k in idxs[::-1]:
-        pos = int(posmap[k + 1])  # positional index compatible with .iloc
+        pos = int(posmap[k + 1])
         ok = True
         if require_color:
             if direction == 'up' and not (df['senkou_span_a'].iloc[pos] > df['senkou_span_b'].iloc[pos]):
@@ -237,7 +234,6 @@ def ichimoku_cross_index(df: pd.DataFrame, direction: str, require_color: bool, 
             return pos
     return None
 
-# ---------- Rest of app (unchanged from Rewired) ----------
 
 def compute_return_since(df: pd.DataFrame, trigger_idx: int, side: str) -> float:
     if trigger_idx is None or trigger_idx >= len(df):
@@ -253,6 +249,7 @@ def slope(series: pd.Series, lookback: int = 5):
         return 0.0
     return float(series.iloc[-1] - series.iloc[-lookback-1])
 
+# ---------- Main Logic ----------
 signals = []
 heatmap_data = {s: np.zeros(len(TICKERS), dtype=float) for s in all_strategies}
 heatmap_hover_text = {s: [""] * len(TICKERS) for s in all_strategies}
