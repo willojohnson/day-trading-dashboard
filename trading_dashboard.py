@@ -3,16 +3,58 @@ import yfinance as yf
 import pandas as pd
 import datetime
 import plotly.graph_objects as go
+import plotly.io as pio
 import numpy as np
 from streamlit_autorefresh import st_autorefresh
 
 # =============================================================
 # Trading Dashboard – Split Heatmaps + Filters + Leaderboards + Hover Toggle
-# - Added sidebar toggle: "Show company names in hover" (ON by default)
-#   Note: Plotly does not fire hover events on axis tick labels themselves.
-#   This toggle injects the company name into each cell's hover so that
-#   hovering anywhere on a row shows the full name.
+# + Theme/Styling merge:
+#   - Plotly dark template + shared layout
+#   - Custom color scales (GREENS / REDS)
+#   - CSS polish (rounded, spacing, sidebar/tabs)
+#   - Title caption for session context
 # =============================================================
+
+# ---- Plotly defaults & shared layout ----
+pio.templates.default = "plotly_dark"
+PLOTLY_LAYOUT = dict(
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+    font=dict(size=13),
+    margin=dict(l=60, r=20, t=60, b=60),
+)
+
+# Cleaner color scales for heatmaps
+GREENS = [[0, "#A7F3D0"], [1, "#065F46"]]   # mint → deep green
+REDS   = [[0, "#FCA5A5"], [1, "#7F1D1D"]]   # blush → deep red
+
+# --- Page Setup ---
+st.set_page_config(layout="wide")
+
+# Small CSS polish
+
+def inject_css():
+    st.markdown(
+        """
+        <style>
+        .block-container {padding-top: 1.2rem; padding-bottom: 2rem;}
+        h1, h2, h3 {letter-spacing: 0.2px;}
+        .stMetric {background: #111827; padding: 12px 14px; border-radius: 12px;}
+        section[data-testid="stSidebar"] .block-container {padding-top: 0.8rem;}
+        section[data-testid="stSidebar"] h2,
+        section[data-testid="stSidebar"] h3 {color: #E5E7EB; font-weight: 600; margin-top: .6rem;}
+        .stSlider > div > div > div {border-radius: 999px;}
+        button[role="tab"][aria-selected="true"] {background: #0F172A; border-radius: 10px;}
+        div[data-testid="stDataFrame"] div[role="grid"] {border-radius: 12px;}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+inject_css()
+
+st.title("📈 Strategy Heatmap")
 
 # --- Tickers to Monitor ---
 TICKERS = [
@@ -39,10 +81,7 @@ TICKER_NAMES = {
     "BTSG": "BrightSpring Health Services"
 }
 
-# --- Page Setup ---
-st.set_page_config(layout="wide")
-st.title("📈 Strategy Heatmap")
-
+# Tabs
 tab1, tab2 = st.tabs(["Dashboard Overview", "Chart Analysis"]) 
 
 # --- Sidebar Options ---
@@ -101,7 +140,10 @@ with st.sidebar.expander("📘 Strategy Definitions", expanded=False):
     st.markdown("**Death Cross + RSI Bearish**: Death Cross and RSI re-entry below 70 within window")
     st.markdown("**Ichimoku Bullish/Bearish**: Close crosses cloud up/down; optional cloud color & Chikou confirmation")
 
-# --- Data Fetch & Indicators (unchanged from prior version) ---
+# Helpful context under title
+st.caption(f"Aligned signals across AI/Semis universe · timeframe: {timeframe} · clamp: ±{COLOR_CLAMP}%")
+
+# --- Data Fetch & Indicators ---
 @st.cache_data(ttl=refresh_rate)
 def fetch_and_process_data(ticker: str, timeframe: str):
     end_date = datetime.datetime.now(); start_date = None; interval = "1d"
@@ -125,17 +167,22 @@ def fetch_and_process_data(ticker: str, timeframe: str):
     if df.empty or "Close" not in df.columns:
         return None, "No valid data."
     df = df.copy()
+    # MAs
     df["20_MA"] = df["Close"].rolling(window=20).mean()
     df["50_MA"] = df["Close"].rolling(window=50).mean()
     df["200_MA"] = df["Close"].rolling(window=200).mean()
+    # RSI (14)
     delta = df["Close"].diff(); gain = delta.clip(lower=0); loss = -delta.clip(upper=0)
     avg_gain = gain.ewm(com=13, adjust=False).mean(); avg_loss = loss.ewm(com=13, adjust=False).mean()
     rs = avg_gain / avg_loss.replace(0, 1e-9); df["RSI"] = 100 - (100 / (1 + rs))
+    # MACD
     exp1 = df["Close"].ewm(span=12, adjust=False).mean(); exp2 = df["Close"].ewm(span=26, adjust=False).mean()
     df["MACD"] = exp1 - exp2; df["MACD_Signal"] = df["MACD"].ewm(span=9, adjust=False).mean(); df["MACD_Hist"] = df["MACD"] - df["MACD_Signal"]
+    # ATR (14)
     high = df['High']; low = df['Low']; close = df['Close']; prev_close = close.shift(1)
     tr = pd.concat([(high - low), (high - prev_close).abs(), (low - prev_close).abs()], axis=1).max(axis=1)
     df['ATR'] = tr.rolling(window=14).mean()
+    # Ichimoku
     high_9 = df["High"].rolling(window=9).max(); low_9 = df["Low"].rolling(window=9).min(); df["tenkan_sen"] = (high_9 + low_9) / 2
     high_26 = df["High"].rolling(window=26).max(); low_26 = df["Low"].rolling(window=26).min(); df["kijun_sen"] = (high_26 + low_26) / 2
     df["senkou_span_a"] = ((df["tenkan_sen"] + df["kijun_sen"]) / 2).shift(26)
@@ -386,7 +433,7 @@ with tab1:
 
     col_bull, col_bear = st.columns(2)
 
-    def render_heatmap(df_plot: pd.DataFrame, ages_plot: pd.DataFrame, title: str, palette: str, side: str):
+    def render_heatmap(df_plot: pd.DataFrame, ages_plot: pd.DataFrame, title: str, palette, side: str):
         if df_plot.empty:
             st.info("No data to display."); return
         # Build per-cell hovertext from the prebuilt hover_df, ensuring company name toggle respected
@@ -396,7 +443,6 @@ with tab1:
             for c in df_plot.columns:
                 val = df_plot.loc[r, c]
                 if np.isfinite(val):
-                    # Use the richer multi-line hover from heatmap_hover, but replace newlines with <br>
                     txt = hover_df.loc[r, c].replace("\n", "<br>") if hover_df.loc[r, c] else f"{r}"
                     row.append(txt)
                 else:
@@ -411,25 +457,20 @@ with tab1:
             hoverinfo='text', text=hover,
             showscale=True, colorbar=dict(title=("Return %" if side=='bull' else "Short Ret %"), ticksuffix="%")
         ))
-        fig.update_layout(
-            title=title,
-            xaxis_title="Strategies", yaxis_title="Tickers",
-            xaxis=dict(tickangle=45, type='category', constrain='domain'),
-            yaxis=dict(autorange='reversed', type='category', constrain='domain'),
-            margin=dict(l=60, r=10, t=60, b=120), height=520
-        )
-        fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(0,0,0,0.15)')
-        fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(0,0,0,0.15)')
+        fig.update_layout(**PLOTLY_LAYOUT)
+        fig.update_layout(title=title, xaxis_title="Strategies", yaxis_title="Tickers")
+        fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.06)', tickangle=45, type='category', constrain='domain')
+        fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(255,255,255,0.06)', autorange='reversed', type='category', constrain='domain')
         st.plotly_chart(fig, use_container_width=True)
 
     with col_bull:
-        render_heatmap(bull_plot, ages_bull, "Bullish Signals", 'Greens', 'bull')
+        render_heatmap(bull_plot, ages_bull, "Bullish Signals", GREENS, 'bull')
     with col_bear:
-        render_heatmap(bear_plot, ages_bear, "Bearish Signals", 'Reds', 'bear')
+        render_heatmap(bear_plot, ages_bear, "Bearish Signals", REDS, 'bear')
 
     st.markdown("---")
 
-    # Leaderboards (unchanged)
+    # Leaderboards
     def melt_active(df_values: pd.DataFrame, df_ages: pd.DataFrame, side: str):
         out = []
         for t in df_values.index:
@@ -463,12 +504,14 @@ with tab1:
     else:
         cR.info("No bearish signals to rank.")
 
-# --- CHART ANALYSIS TAB (unchanged) ---
+# --- CHART ANALYSIS TAB ---
 with tab2:
     st.markdown("### 🔎 Detailed Chart Analysis")
     chart_ticker = st.selectbox("Select a Ticker", options=TICKERS, key="chart_ticker")
+
     def fetch_wrap(ticker):
         return fetch_and_process_data(ticker, timeframe)
+
     if chart_ticker:
         chart_df, error_msg = fetch_wrap(chart_ticker)
         if chart_df is not None and not chart_df.empty:
@@ -478,6 +521,7 @@ with tab2:
                 go.Scatter(x=chart_df.index, y=chart_df['50_MA'], mode='lines', name='50 MA', line=dict(color='blue', width=2)),
                 go.Scatter(x=chart_df.index, y=chart_df['200_MA'], mode='lines', name='200 MA', line=dict(color='red', width=2))
             ])
+            fig_candlestick.update_layout(**PLOTLY_LAYOUT)
             fig_candlestick.update_layout(title=f"{TICKER_NAMES.get(chart_ticker, chart_ticker)} Price Action (Moving Averages)", xaxis_rangeslider_visible=False, legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1))
             st.plotly_chart(fig_candlestick, use_container_width=True)
 
@@ -489,6 +533,7 @@ with tab2:
                 go.Scatter(x=chart_df.index, y=chart_df['senkou_span_a'], fill=None, mode='lines', line=dict(color='rgba(0,0,0,0)'), name='Cloud'),
                 go.Scatter(x=chart_df.index, y=chart_df['senkou_span_b'], fill='tonexty', mode='lines', line=dict(color='rgba(0,0,0,0)'), fillcolor='rgba(255, 0, 0, 0.2)' if chart_df['senkou_span_a'].iloc[-1] > chart_df['senkou_span_b'].iloc[-1] else 'rgba(0, 255, 0, 0.2)', name='Cloud Fill')
             ])
+            fig_ichimoku.update_layout(**PLOTLY_LAYOUT)
             fig_ichimoku.update_layout(title=f"{TICKER_NAMES.get(chart_ticker, chart_ticker)} Ichimoku Cloud ({timeframe} interval)", xaxis_rangeslider_visible=False, legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1))
             st.plotly_chart(fig_ichimoku, use_container_width=True)
         else:
