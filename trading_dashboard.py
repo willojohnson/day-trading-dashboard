@@ -7,10 +7,12 @@ import numpy as np
 from streamlit_autorefresh import st_autorefresh
 
 # =============================================================
-# Trading Dashboard – Hotfix v2
-# - Fix ambiguous truth on valid.sum() by using numpy array
-# - Ensure ALL cross-index helpers return **positional** indices for .iloc
-# - Keep all prior rewired improvements (RSI re-entry, slope, combo window, ATR filter, etc.)
+# Trading Dashboard – Clean Full Code
+# - Removes Streamlit inline one-liner for signals (uses explicit if/else)
+# - All cross-index helpers return **positional** indices for .iloc
+# - Fixes Ichimoku valid mask ambiguity (uses NumPy arrays)
+# - Keeps all prior strategy upgrades: RSI re-entry, slope filters, combo window,
+#   MACD ATR-based noise filter, Ichimoku confirmations, heatmap returns/clamp
 # =============================================================
 
 # --- Tickers to Monitor ---
@@ -19,6 +21,7 @@ TICKERS = [
     "AMD", "BBAI", "SOUN", "CRSP", "TSM", "DDOG", "BTSG"
 ]
 
+# --- Ticker to Company Name Mapping ---
 TICKER_NAMES = {
     "NVDA": "NVIDIA Corporation",
     "MSFT": "Microsoft Corporation",
@@ -37,15 +40,19 @@ TICKER_NAMES = {
     "BTSG": "BrightSpring Health Services"
 }
 
+# --- Page Setup ---
 st.set_page_config(layout="wide")
-st.title("📈 Real-Time Trading Dashboard (Hotfix v2)")
+st.title("📈 Real-Time Trading Dashboard")
 
+# --- Tabs for navigation ---
 tab1, tab2 = st.tabs(["Dashboard Overview", "Chart Analysis"]) 
 
+# --- Sidebar Options ---
 st.sidebar.header("Dashboard Settings")
 refresh_rate = st.sidebar.slider("Refresh every N seconds", min_value=10, max_value=300, value=30, step=10)
 st_autorefresh(interval=refresh_rate * 1000, key="autorefresh")
 
+# --- Interactive Strategy Selectors ---
 all_bullish_strategies = [
     "Trend Trading", "MACD Bullish Crossover", "RSI Oversold (Re-entry)", "Golden Cross",
     "Trend + MACD Bullish", "Ichimoku Bullish"
@@ -65,7 +72,7 @@ selected_strategies = selected_bullish + selected_bearish
 timeframe_options = ["5m", "15m", "30m", "1h", "1d", "3 month", "6 month", "YTD", "1 year", "5 year"]
 timeframe = st.sidebar.selectbox("Select Timeframe", timeframe_options, index=4)
 
-# --- Signal Filters / Options ---
+# --- Strategy Filters / Options ---
 st.sidebar.markdown("### 🔧 Signal Filters & Options")
 MA_SLOPE_FILTER = st.sidebar.checkbox("Require MA slope confirmation (20/50/200)", value=True)
 COMBO_WINDOW = st.sidebar.number_input("Combo window (bars)", min_value=0, max_value=10, value=3, step=1)
@@ -75,6 +82,7 @@ ICHIMOKU_REQUIRE_COLOR = st.sidebar.checkbox("Ichimoku: require bullish/bearish 
 ICHIMOKU_REQUIRE_CHIKOU = st.sidebar.checkbox("Ichimoku: require Chikou confirmation", value=True)
 COLOR_CLAMP = st.sidebar.slider("Heatmap color clamp (abs %)", 10, 100, 50, 5)
 
+# --- Collapsible Strategy Definitions Section ---
 with st.sidebar.expander("📘 Strategy Definitions", expanded=False):
     st.markdown("**Trend Trading**: 20MA cross **up** above 50MA (with optional slope filter)")
     st.markdown("**RSI Oversold (Re-entry)**: RSI crosses **up** back above 30")
@@ -86,6 +94,7 @@ with st.sidebar.expander("📘 Strategy Definitions", expanded=False):
     st.markdown("**Death Cross + RSI Bearish**: Death Cross and RSI re-entry below 70 within window")
     st.markdown("**Ichimoku Bullish/Bearish**: Close crosses cloud up/down; optional cloud color & Chikou confirmation")
 
+# --- Data Fetch & Indicators ---
 @st.cache_data(ttl=refresh_rate)
 def fetch_and_process_data(ticker: str, timeframe: str):
     end_date = datetime.datetime.now()
@@ -118,7 +127,7 @@ def fetch_and_process_data(ticker: str, timeframe: str):
 
     df = df.copy()
 
-    # MAs
+    # Moving Averages
     df["20_MA"] = df["Close"].rolling(window=20).mean()
     df["50_MA"] = df["Close"].rolling(window=50).mean()
     df["200_MA"] = df["Close"].rolling(window=200).mean()
@@ -140,35 +149,51 @@ def fetch_and_process_data(ticker: str, timeframe: str):
     df["MACD_Hist"] = df["MACD"] - df["MACD_Signal"]
 
     # ATR (14)
-    high = df['High']; low = df['Low']; close = df['Close']
+    high = df['High']
+    low = df['Low']
+    close = df['Close']
     prev_close = close.shift(1)
-    tr = pd.concat([(high - low), (high - prev_close).abs(), (low - prev_close).abs()], axis=1).max(axis=1)
+    tr = pd.concat([
+        (high - low),
+        (high - prev_close).abs(),
+        (low - prev_close).abs()
+    ], axis=1).max(axis=1)
     df['ATR'] = tr.rolling(window=14).mean()
 
-    # Ichimoku
-    high_9 = df["High"].rolling(window=9).max(); low_9 = df["Low"].rolling(window=9).min()
+    # Ichimoku Cloud
+    high_9 = df["High"].rolling(window=9).max()
+    low_9 = df["Low"].rolling(window=9).min()
     df["tenkan_sen"] = (high_9 + low_9) / 2
-    high_26 = df["High"].rolling(window=26).max(); low_26 = df["Low"].rolling(window=26).min()
+
+    high_26 = df["High"].rolling(window=26).max()
+    low_26 = df["Low"].rolling(window=26).min()
     df["kijun_sen"] = (high_26 + low_26) / 2
+
     df["senkou_span_a"] = ((df["tenkan_sen"] + df["kijun_sen"]) / 2).shift(26)
-    high_52 = df["High"].rolling(window=52).max(); low_52 = df["Low"].rolling(window=52).min()
+
+    high_52 = df["High"].rolling(window=52).max()
+    low_52 = df["Low"].rolling(window=52).min()
     df["senkou_span_b"] = ((high_52 + low_52) / 2).shift(26)
+
     df["chikou_span"] = df["Close"].shift(-26)
 
     return df, None
 
-# ---------- Helpers (positional indices) ----------
-
+# --- Utility: NaN-safe crossing helpers ---
 def _nanmask(a: pd.Series, b: pd.Series):
     m = (~a.isna()) & (~b.isna())
     return a[m].values, b[m].values, np.where(m)[0]  # positional map
 
 
 def last_cross_index(series_a: pd.Series, series_b: pd.Series, direction: str):
+    """Find last index where a cross happened. direction in {'up','down'}. Returns **positional** index."""
     a, b, posmap = _nanmask(series_a, series_b)
     if len(a) < 2:
         return None
-    cross = (a[:-1] <= b[:-1]) & (a[1:] > b[1:]) if direction == 'up' else (a[:-1] >= b[:-1]) & (a[1:] < b[1:])
+    if direction == "up":
+        cross = (a[:-1] <= b[:-1]) & (a[1:] > b[1:])
+    else:
+        cross = (a[:-1] >= b[:-1]) & (a[1:] < b[1:])
     idxs = np.where(cross)[0]
     return int(posmap[idxs[-1] + 1]) if idxs.size else None
 
@@ -201,20 +226,23 @@ def ichimoku_cross_index(df: pd.DataFrame, direction: str, require_color: bool, 
     c = close.values[valid_np]
     A = a.values[valid_np]
     B = b.values[valid_np]
-    posmap = np.where(valid_np)[0]
+    posmap = np.where(valid_np)[0]  # positional indices back to df
 
     cloud_top_prev = np.maximum(A[:-1], B[:-1])
     cloud_top_now  = np.maximum(A[1:],  B[1:])
     cloud_bot_prev = np.minimum(A[:-1], B[:-1])
     cloud_bot_now  = np.minimum(A[1:],  B[1:])
 
-    cross = (c[:-1] <= cloud_top_prev) & (c[1:] > cloud_top_now) if direction == 'up' \
-            else (c[:-1] >= cloud_bot_prev) & (c[1:] < cloud_bot_now)
+    if direction == 'up':
+        cross = (c[:-1] <= cloud_top_prev) & (c[1:] > cloud_top_now)
+    else:
+        cross = (c[:-1] >= cloud_bot_prev) & (c[1:] < cloud_bot_now)
 
     idxs = np.where(cross)[0]
     if not idxs.size:
         return None
 
+    # Validate most‑recent first
     for k in idxs[::-1]:
         pos = int(posmap[k + 1])
         ok = True
@@ -249,28 +277,33 @@ def slope(series: pd.Series, lookback: int = 5):
         return 0.0
     return float(series.iloc[-1] - series.iloc[-lookback-1])
 
-# ---------- Main Logic ----------
+# --- Main Logic ---
 signals = []
-heatmap_data = {s: np.zeros(len(TICKERS), dtype=float) for s in all_strategies}
-heatmap_hover_text = {s: [""] * len(TICKERS) for s in all_strategies}
+heatmap_data = {strategy: np.zeros(len(TICKERS), dtype=float) for strategy in all_strategies}
+heatmap_hover_text = {strategy: [""] * len(TICKERS) for strategy in all_strategies}
 
 with st.spinner("⚙️ Processing data and generating signals..."):
     if selected_strategies:
         for i, ticker in enumerate(TICKERS):
             company = TICKER_NAMES.get(ticker, ticker)
             df, error_msg = fetch_and_process_data(ticker, timeframe)
+
             if error_msg:
                 st.warning(f"⚠️ {error_msg} for {ticker} ({company}). Using neutral values.")
                 continue
+
             if len(df) < 210:
                 st.info(f"ℹ️ Limited data for {ticker}. Some strategies may not trigger.")
 
+            # Slopes
             s20 = slope(df['20_MA']); s50 = slope(df['50_MA']); s200 = slope(df['200_MA'])
+
+            # MACD ATR delta threshold
             macd_ok = True
             if MACD_ATR_FILTER_ON:
                 macd_ok = df['ATR'].iloc[-1] <= 0 or abs(df['MACD_Hist'].iloc[-1]) >= (MACD_ATR_MULT * df['ATR'].iloc[-1])
 
-            # Bullish
+            # ---- Bullish ----
             if "Trend Trading" in selected_bullish:
                 idx_trend = last_cross_index(df["20_MA"], df["50_MA"], "up")
                 if idx_trend is not None and (not MA_SLOPE_FILTER or (s20 > 0 and s50 >= 0)):
@@ -321,7 +354,7 @@ with st.spinner("⚙️ Processing data and generating signals..."):
                     signals.append((ticker, "bullish", f"☁️ Ichimoku Breakout — {company} | {df.index[idx_i_bull].date()} → {ret:.2f}%"))
                     heatmap_hover_text["Ichimoku Bullish"][i] = f"Cloud up cross on {df.index[idx_i_bull].date()}<br>Ret: {ret:.2f}%"
 
-            # Bearish (negative)
+            # ---- Bearish (store negative) ----
             if "RSI Overbought (Re-entry)" in selected_bearish:
                 idx_rsi_bear = last_threshold_cross_index(df["RSI"], 70.0, 'reenter_below')
                 if idx_rsi_bear is not None:
@@ -366,13 +399,18 @@ with st.spinner("⚙️ Processing data and generating signals..."):
     else:
         st.info("⚠️ Please select at least one strategy from the sidebar to generate signals.")
 
+# Create DataFrames for the heatmap
 heatmap_df = pd.DataFrame(heatmap_data, index=TICKERS)
 heatmap_hover_df = pd.DataFrame(heatmap_hover_text, index=TICKERS)
 
+# --- DASHBOARD OVERVIEW TAB ---
 with tab1:
+    # --- KPI Metrics at the Top ---
     st.markdown("### 📊 Market Overview")
     kpi_ticker = st.selectbox("Select a Ticker to view KPIs", TICKERS, index=0, key="kpi_select")
+
     kpi_df, _ = fetch_and_process_data(kpi_ticker, "1 year")
+
     if kpi_df is not None and not kpi_df.empty and len(kpi_df) >= 2:
         latest_price = float(kpi_df['Close'].iloc[-1]); previous_price = float(kpi_df['Close'].iloc[-2])
         current_volume = int(kpi_df['Volume'].iloc[-1])
@@ -388,21 +426,28 @@ with tab1:
         st.warning(f"⚠️ Insufficient data for {kpi_ticker} to calculate KPIs. Please check back later.")
 
     st.markdown("---")
+
+    # --- Signal Display (explicit if/else, no one-liners) ---
     st.markdown("### ✅ Current Trade Signals")
     if signals:
         for _, signal_type, msg in signals:
-            st.success(msg) if signal_type == 'bullish' else st.error(msg)
+            if signal_type == 'bullish':
+                st.success(msg)
+            else:
+                st.error(msg)
     elif selected_strategies:
         st.info("No trade signals at this time for any active strategies.")
     else:
         st.info("Please select strategies from the sidebar to see current trade signals.")
 
     st.markdown("---")
+
+    # --- Strategy Heatmap ---
     st.markdown("### 📊 Strategy Heatmap")
     if not heatmap_df.empty:
         max_abs = np.nanmax(np.abs(heatmap_df.values)) if heatmap_df.size else 1.0
         if not np.isfinite(max_abs) or max_abs == 0: max_abs = 1.0
-        max_abs = min(max_abs, float(COLOR_CLAMP))
+        max_abs = min(max_abs, float(COLOR_CLAMP))  # clamp for color scaling
         colorscale = [[0.0, "rgb(180,0,0)"],[0.5, "rgb(220,220,220)"],[1.0, "rgb(0,180,0)"]]
         fig_heatmap = go.Figure(data=go.Heatmap(
             z=heatmap_df.values,
@@ -423,9 +468,11 @@ with tab1:
 
     st.markdown("---")
 
+# --- CHART ANALYSIS TAB ---
 with tab2:
     st.markdown("### 🔎 Detailed Chart Analysis")
     chart_ticker = st.selectbox("Select a Ticker", options=TICKERS, key="chart_ticker")
+
     if chart_ticker:
         chart_df, error_msg = fetch_and_process_data(chart_ticker, timeframe)
         if chart_df is not None and not chart_df.empty:
