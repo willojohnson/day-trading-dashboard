@@ -34,6 +34,7 @@ TICKER_NAMES = {
     "TSM": "Taiwan Semiconductor",
     "DDOG": "Datadog Inc.",
     "BTSG": "BrightSpring Health Services"
+    "ARDX": "Ardelyx Pharmaceuticals"
 }
 
 # --- Page Setup ---
