@@ -13,7 +13,7 @@ from streamlit_autorefresh import st_autorefresh
 
 # --- Tickers to Monitor ---
 TICKERS = [
-    "NVDA", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "SNOW", "AI",
+    "NVDA", "AMZN", "META", "TSLA", "SNOW", "AI",
     "AMD", "BBAI", "SOUN", "CRSP", "TSM", "DDOG", "BTSG", "ARDX"
 ]
 
