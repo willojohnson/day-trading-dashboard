@@ -20,8 +20,6 @@ TICKERS = [
 # --- Ticker to Company Name Mapping ---
 TICKER_NAMES = {
     "NVDA": "NVIDIA Corporation",
-    "MSFT": "Microsoft Corporation",
-    "GOOGL": "Alphabet Inc.",
     "AMZN": "Amazon.com Inc.",
     "META": "Meta Platforms Inc.",
     "TSLA": "Tesla Inc.",
@@ -33,8 +31,8 @@ TICKER_NAMES = {
     "CRSP": "CRISPR Therapeutics AG",
     "TSM": "Taiwan Semiconductor",
     "DDOG": "Datadog Inc.",
-    "BTSG": "BrightSpring Health Services"
-    "ARDX": "Ardelyx Pharmaceuticals"
+    "BTSG": "BrightSpring Health Services",
+    "ARDX": "Ardelyx Pharmaceuticals",
 }
 
 # --- Page Setup ---
