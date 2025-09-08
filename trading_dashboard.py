@@ -9,9 +9,8 @@ from datetime import timezone
 
 # =============================================================
 # Trading Dashboard – Split Heatmaps + Filters + Leaderboards
-# Pre-styling version (reverted), with hover toggle for company names
-# + Last Refresh timestamp & data source caption
 # + Fresh-trigger borders & Data latency badge
+# + Leaderboards honor sidebar filters (min return, max age, triggered only)
 # =============================================================
 
 # --- Tickers to Monitor ---
@@ -50,7 +49,7 @@ tab1, tab2 = st.tabs(["Dashboard Overview", "Chart Analysis"])
 
 # --- Sidebar Options ---
 st.sidebar.header("Dashboard Settings")
-refresh_rate = st.sidebar.slider("Refresh every N seconds", min_value=10, max_value=300, value=60, step=10)
+refresh_rate = st.sidebar.slider("Refresh every N seconds", min_value=10, max_value=300, value=30, step=10)
 st_autorefresh(interval=refresh_rate * 1000, key="autorefresh")
 
 # --- Interactive Strategy Selectors ---
@@ -265,7 +264,6 @@ def signal_age_days(df: pd.DataFrame, trigger_idx: int) -> float:
     if trigger_idx is None or trigger_idx >= len(df): return np.nan
     end_ts = df.index[-1]; trig_ts = df.index[trigger_idx]
     delta = (end_ts - trig_ts)
-    # Support intraday frequency
     return round(delta.total_seconds() / 86400.0, 2)
 
 def slope(series: pd.Series, lookback: int = 5):
@@ -301,13 +299,11 @@ with st.spinner("⚙️ Processing data and generating signals..."):
             if len(df) < 210:
                 st.info(f"ℹ️ Limited data for {ticker}. Some strategies may not trigger.")
 
-            # --- latency measurement (most recent bar recency) ---
+            # latency measurement
             try:
                 now = datetime.datetime.now(timezone.utc).astimezone()
-                # yfinance index may be tz-aware or naive; coerce to local tz
                 last_ts = df.index[-1]
                 if last_ts.tzinfo is None:
-                    # assume localize to UTC then convert to local (best-effort)
                     last_ts = last_ts.replace(tzinfo=timezone.utc).astimezone()
                 latency = (now - last_ts).total_seconds()
                 if (worst_latency_sec is None) or (latency > worst_latency_sec):
@@ -326,7 +322,6 @@ with st.spinner("⚙️ Processing data and generating signals..."):
                 if idx is not None and (not MA_SLOPE_FILTER or (s20 > 0 and s50 >= 0)):
                     ret = compute_return_since(df, idx, 'long'); age = signal_age_days(df, idx)
                     heatmap_data['Trend Trading'][i] = ret; heatmap_age['Trend Trading'][i] = age
-                    signals.append((ticker, 'bullish', f"📈 Trend Up — {company} | {df.index[idx].date()} → {ret:.2f}%"))
                     heatmap_hover['Trend Trading'][i] = f"{ticker} — {company if SHOW_FULLNAME_HOVER else ''}\n20>50 on {df.index[idx].date()}\nRet: {ret:.2f}%  |  Age: {age}d"
 
             if "RSI Oversold (Re-entry)" in selected_bullish:
@@ -334,7 +329,6 @@ with st.spinner("⚙️ Processing data and generating signals..."):
                 if idx is not None:
                     ret = compute_return_since(df, idx, 'long'); age = signal_age_days(df, idx)
                     heatmap_data['RSI Oversold (Re-entry)'][i] = ret; heatmap_age['RSI Oversold (Re-entry)'][i] = age
-                    signals.append((ticker, 'bullish', f"📈 RSI Re-entry >30 — {company} | {df.index[idx].date()} → {ret:.2f}%"))
                     heatmap_hover['RSI Oversold (Re-entry)'][i] = f"{ticker} — {company if SHOW_FULLNAME_HOVER else ''}\nRSI↑ >30 on {df.index[idx].date()}\nRet: {ret:.2f}%  |  Age: {age}d"
 
             if "MACD Bullish Crossover" in selected_bullish:
@@ -342,7 +336,6 @@ with st.spinner("⚙️ Processing data and generating signals..."):
                 if idx is not None and macd_ok:
                     ret = compute_return_since(df, idx, 'long'); age = signal_age_days(df, idx)
                     heatmap_data['MACD Bullish Crossover'][i] = ret; heatmap_age['MACD Bullish Crossover'][i] = age
-                    signals.append((ticker, 'bullish', f"📈 MACD Cross Up — {company} | {df.index[idx].date()} → {ret:.2f}%"))
                     heatmap_hover['MACD Bullish Crossover'][i] = f"{ticker} — {company if SHOW_FULLNAME_HOVER else ''}\nMACD↑ on {df.index[idx].date()}\nRet: {ret:.2f}%  |  Age: {age}d"
 
             if "Golden Cross" in selected_bullish:
@@ -350,7 +343,6 @@ with st.spinner("⚙️ Processing data and generating signals..."):
                 if idx is not None and (not MA_SLOPE_FILTER or (s50 > 0 and s200 >= 0)):
                     ret = compute_return_since(df, idx, 'long'); age = signal_age_days(df, idx)
                     heatmap_data['Golden Cross'][i] = ret; heatmap_age['Golden Cross'][i] = age
-                    signals.append((ticker, 'bullish', f"✨ Golden Cross — {company} | {df.index[idx].date()} → {ret:.2f}%"))
                     heatmap_hover['Golden Cross'][i] = f"{ticker} — {company if SHOW_FULLNAME_HOVER else ''}\n50>200 on {df.index[idx].date()}\nRet: {ret:.2f}%  |  Age: {age}d"
 
             if "Trend + MACD Bullish" in selected_bullish:
@@ -359,7 +351,6 @@ with st.spinner("⚙️ Processing data and generating signals..."):
                     idx = max(idx1, idx2)
                     ret = compute_return_since(df, idx, 'long'); age = signal_age_days(df, idx)
                     heatmap_data['Trend + MACD Bullish'][i] = ret; heatmap_age['Trend + MACD Bullish'][i] = age
-                    signals.append((ticker, 'bullish', f"✨ Trend+MACD — {company} | {df.index[idx].date()} → {ret:.2f}%"))
                     heatmap_hover['Trend + MACD Bullish'][i] = f"{ticker} — {company if SHOW_FULLNAME_HOVER else ''}\nWithin {COMBO_WINDOW} bars\nRet: {ret:.2f}%  |  Age: {age}d"
 
             if "Ichimoku Bullish" in selected_bullish:
@@ -367,16 +358,14 @@ with st.spinner("⚙️ Processing data and generating signals..."):
                 if idx is not None:
                     ret = compute_return_since(df, idx, 'long'); age = signal_age_days(df, idx)
                     heatmap_data['Ichimoku Bullish'][i] = ret; heatmap_age['Ichimoku Bullish'][i] = age
-                    signals.append((ticker, 'bullish', f"☁️ Ichimoku Breakout — {company} | {df.index[idx].date()} → {ret:.2f}%"))
                     heatmap_hover['Ichimoku Bullish'][i] = f"{ticker} — {company if SHOW_FULLNAME_HOVER else ''}\nCloud up cross on {df.index[idx].date()}\nRet: {ret:.2f}%  |  Age: {age}d"
 
-            # Bearish (negative)
+            # Bearish
             if "RSI Overbought (Re-entry)" in selected_bearish:
                 idx = last_threshold_cross_index(df['RSI'], 70.0, 'reenter_below')
                 if idx is not None:
                     ret = compute_return_since(df, idx, 'short'); age = signal_age_days(df, idx)
                     heatmap_data['RSI Overbought (Re-entry)'][i] = -ret; heatmap_age['RSI Overbought (Re-entry)'][i] = age
-                    signals.append((ticker, 'bearish', f"📉 RSI Re-entry <70 — {company} | {df.index[idx].date()} → {ret:.2f}%"))
                     heatmap_hover['RSI Overbought (Re-entry)'][i] = f"{ticker} — {company if SHOW_FULLNAME_HOVER else ''}\nRSI↓ <70 on {df.index[idx].date()}\nShort Ret: {ret:.2f}%  |  Age: {age}d"
 
             if "MACD Bearish Crossover" in selected_bearish:
@@ -384,7 +373,6 @@ with st.spinner("⚙️ Processing data and generating signals..."):
                 if idx is not None and macd_ok:
                     ret = compute_return_since(df, idx, 'short'); age = signal_age_days(df, idx)
                     heatmap_data['MACD Bearish Crossover'][i] = -ret; heatmap_age['MACD Bearish Crossover'][i] = age
-                    signals.append((ticker, 'bearish', f"📉 MACD Cross Down — {company} | {df.index[idx].date()} → {ret:.2f}%"))
                     heatmap_hover['MACD Bearish Crossover'][i] = f"{ticker} — {company if SHOW_FULLNAME_HOVER else ''}\nMACD↓ on {df.index[idx].date()}\nShort Ret: {ret:.2f}%  |  Age: {age}d"
 
             if "Death Cross" in selected_bearish:
@@ -392,7 +380,6 @@ with st.spinner("⚙️ Processing data and generating signals..."):
                 if idx is not None and (not MA_SLOPE_FILTER or (s50 < 0 and s200 <= 0)):
                     ret = compute_return_since(df, idx, 'short'); age = signal_age_days(df, idx)
                     heatmap_data['Death Cross'][i] = -ret; heatmap_age['Death Cross'][i] = age
-                    signals.append((ticker, 'bearish', f"💀 Death Cross — {company} | {df.index[idx].date()} → {ret:.2f}%"))
                     heatmap_hover['Death Cross'][i] = f"{ticker} — {company if SHOW_FULLNAME_HOVER else ''}\n50<200 on {df.index[idx].date()}\nShort Ret: {ret:.2f}%  |  Age: {age}d"
 
             if "Death Cross + RSI Bearish" in selected_bearish:
@@ -401,7 +388,6 @@ with st.spinner("⚙️ Processing data and generating signals..."):
                     idx = max(idx1, idx2)
                     ret = compute_return_since(df, idx, 'short'); age = signal_age_days(df, idx)
                     heatmap_data['Death Cross + RSI Bearish'][i] = -ret; heatmap_age['Death Cross + RSI Bearish'][i] = age
-                    signals.append((ticker, 'bearish', f"💀 Death+RSI — {company} | {df.index[idx].date()} → {ret:.2f}%"))
                     heatmap_hover['Death Cross + RSI Bearish'][i] = f"{ticker} — {company if SHOW_FULLNAME_HOVER else ''}\nWithin {COMBO_WINDOW} bars\nShort Ret: {ret:.2f}%  |  Age: {age}d"
 
             if "Ichimoku Bearish" in selected_bearish:
@@ -409,7 +395,6 @@ with st.spinner("⚙️ Processing data and generating signals..."):
                 if idx is not None:
                     ret = compute_return_since(df, idx, 'short'); age = signal_age_days(df, idx)
                     heatmap_data['Ichimoku Bearish'][i] = -ret; heatmap_age['Ichimoku Bearish'][i] = age
-                    signals.append((ticker, 'bearish', f"☁️ Ichimoku Breakdown — {company} | {df.index[idx].date()} → {ret:.2f}%"))
                     heatmap_hover['Ichimoku Bearish'][i] = f"{ticker} — {company if SHOW_FULLNAME_HOVER else ''}\nCloud down cross on {df.index[idx].date()}\nShort Ret: {ret:.2f}%  |  Age: {age}d"
     else:
         st.info("⚠️ Please select at least one strategy from the sidebar to generate signals.")
@@ -417,7 +402,6 @@ with st.spinner("⚙️ Processing data and generating signals..."):
 # --- Build DataFrames ---
 heatmap_df = pd.DataFrame(heatmap_data, index=TICKERS)
 ages_df = pd.DataFrame(heatmap_age, index=TICKERS)
-hover_df = pd.DataFrame(heatmap_hover, index=TICKERS)
 
 # Convenience matrices for split views
 bull_df = heatmap_df.clip(lower=0)
@@ -429,7 +413,6 @@ st.session_state.last_refresh = local_ts
 
 latency_badge = ""
 if timeframe in ["5m", "15m", "30m", "1h"]:
-    # show worst-case latency across tickers
     h = _humanize_secs(worst_latency_sec) if worst_latency_sec is not None else "—"
     if worst_latency_sec is not None and worst_latency_sec >= LATENCY_ALERT_MIN * 60:
         latency_badge = f" • ⚠️ Data latency: {h}"
@@ -446,7 +429,7 @@ st.caption(
 with tab1:
     # Summary strip
     total_bull = int((bull_df > 0).sum().sum()); total_bear = int((bear_df > 0).sum().sum())
-    c1, c2, c3 = st.columns([1,1,2])
+    c1, c2, _ = st.columns([1,1,2])
     c1.success(f"Bullish: {total_bull} active cells")
     c2.error(f"Bearish: {total_bear} active cells")
 
@@ -457,18 +440,17 @@ with tab1:
     with cage: max_age_local = st.slider("Max age (days)", 1, 180, MAX_AGE_DAYS, key="max_age_local")
     with ctrigger: triggered_only_local = st.toggle("Triggered only", TRIGGERED_ONLY, key="triggered_only_local")
 
-    # Filtering masks
+    # Filtering masks (applied to matrices used by both heatmaps and leaderboards)
     def filter_matrix(values: pd.DataFrame, ages: pd.DataFrame, min_ret: float, max_age: int, triggered_only: bool):
         Z = values.copy()
         A = ages.reindex_like(values)
-        # Drop by min return
-        Z = Z.where(Z >= min_ret, np.nan)
-        # Drop by max age
-        Z = Z.where((A <= max_age) | (~np.isfinite(A)), np.nan)
+        Z = Z.where(Z >= min_ret, np.nan)                     # min return
+        Z = Z.where((A <= max_age) | (~np.isfinite(A)), np.nan)  # max age
         if triggered_only:
-            Z = Z.where(np.isfinite(Z))  # keep NaNs for non-triggered
+            Z = Z.where(np.isfinite(Z))                       # hide non-triggered
         return Z
 
+    # Apply filter to both sides
     bull_plot = filter_matrix(bull_df, ages_df, min_ret_local, max_age_local, triggered_only_local)
     bear_plot = filter_matrix(bear_df, ages_df, min_ret_local, max_age_local, triggered_only_local)
 
@@ -476,22 +458,27 @@ with tab1:
     def order_rows(df_plot: pd.DataFrame, ages: pd.DataFrame, how: str):
         if how == "Best return":
             score = df_plot.max(axis=1).fillna(0)
-            return df_plot.loc[score.sort_values(ascending=False).index], ages.loc[score.sort_values(ascending=False).index]
+            idx = score.sort_values(ascending=False).index
+            return df_plot.loc[idx], ages.loc[idx]
         if how == "Most recent":
             age_min = ages.where(np.isfinite(df_plot)).min(axis=1).fillna(1e9)
-            return df_plot.loc[age_min.sort_values(ascending=True).index], ages.loc[age_min.sort_values(ascending=True).index]
+            idx = age_min.sort_values(ascending=True).index
+            return df_plot.loc[idx], ages.loc[idx]
         return df_plot.sort_index(), ages.sort_index()
 
     def order_cols(df_plot: pd.DataFrame, ages: pd.DataFrame, how: str):
         if how == "Most triggers":
             score = (np.isfinite(df_plot)).sum(axis=0)
-            return df_plot.loc[:, score.sort_values(ascending=False).index], ages.loc[:, score.sort_values(ascending=False).index]
+            cols = score.sort_values(ascending=False).index
+            return df_plot.loc[:, cols], ages.loc[:, cols]
         if how == "Best avg return":
             score = df_plot.mean(axis=0, skipna=True).fillna(0)
-            return df_plot.loc[:, score.sort_values(ascending=False).index], ages.loc[:, score.sort_values(ascending=False).index]
+            cols = score.sort_values(ascending=False).index
+            return df_plot.loc[:, cols], ages.loc[:, cols]
         if how == "Most recent":
             age_min = ages.where(np.isfinite(df_plot)).min(axis=0).fillna(1e9)
-            return df_plot.loc[:, age_min.sort_values(ascending=True).index], ages.loc[:, age_min.sort_values(ascending=True).index]
+            cols = age_min.sort_values(ascending=True).index
+            return df_plot.loc[:, cols], ages.loc[:, cols]
         return df_plot, ages
 
     # Apply ordering
@@ -507,11 +494,8 @@ with tab1:
             st.info("No data to display.")
             return
 
-        # Build per-cell hovertext
-        hover = []
-        fresh_x = []  # column names for fresh cells
-        fresh_y = []  # row names (tickers) for fresh cells
-
+        # Build per-cell hovertext and find 'fresh' cells for border overlay
+        hover, fresh_x, fresh_y = [], [], []
         for r in df_plot.index:
             row = []
             for c in df_plot.columns:
@@ -520,17 +504,14 @@ with tab1:
                 if np.isfinite(val):
                     comp = f"{TICKER_NAMES.get(r, r)}<br>" if SHOW_FULLNAME_HOVER else ""
                     row.append(f"{r} — {c}<br>{comp}Return: {val:.2f}%<br>Age: {age if np.isfinite(age) else '—'}d")
-                    # mark fresh cells (bold border overlay)
                     if np.isfinite(age) and age <= FRESH_AGE_DAYS:
-                        fresh_x.append(c)
-                        fresh_y.append(r)
+                        fresh_x.append(c); fresh_y.append(r)
                 else:
                     row.append("")
             hover.append(row)
 
         fig = go.Figure()
 
-        # Base heatmap
         fig.add_trace(go.Heatmap(
             z=df_plot.values,
             x=list(df_plot.columns),
@@ -542,20 +523,12 @@ with tab1:
             colorbar=dict(title=("Return %" if side=='bull' else "Short Ret %"), ticksuffix="%")
         ))
 
-        # Overlay: square markers with transparent fill + visible border to highlight fresh signals
+        # Overlay borders for fresh cells
         if len(fresh_x):
             fig.add_trace(go.Scatter(
-                x=fresh_x,
-                y=fresh_y,
-                mode="markers",
-                marker=dict(
-                    symbol="square",
-                    size=28,                 # size in px; looks good for typical layout
-                    color="rgba(0,0,0,0)",   # transparent fill
-                    line=dict(color="black", width=2)
-                ),
-                hoverinfo="skip",
-                showlegend=False
+                x=fresh_x, y=fresh_y, mode="markers",
+                marker=dict(symbol="square", size=28, color="rgba(0,0,0,0)", line=dict(color="black", width=2)),
+                hoverinfo="skip", showlegend=False
             ))
 
         fig.update_layout(
@@ -563,8 +536,7 @@ with tab1:
             xaxis_title="Strategies", yaxis_title="Tickers",
             xaxis=dict(tickangle=45, type='category', constrain='domain'),
             yaxis=dict(autorange='reversed', type='category', constrain='domain'),
-            margin=dict(l=60, r=10, t=60, b=120),
-            height=520
+            margin=dict(l=60, r=10, t=60, b=120), height=520
         )
         fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='rgba(0,0,0,0.15)')
         fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(0,0,0,0.15)')
@@ -577,38 +549,45 @@ with tab1:
 
     st.markdown("---")
 
-    # Leaderboards
-    def melt_active(df_values: pd.DataFrame, df_ages: pd.DataFrame, side: str):
+    # --- LEADERBOARDS (filtered; honors all sidebar controls) ---
+    def melt_active_filtered(df_values: pd.DataFrame, df_ages: pd.DataFrame, side: str) -> pd.DataFrame:
+        """
+        Build a long-form table from the ALREADY-FILTERED matrices.
+        Honors Min Return %, Max Age, and Show triggered only.
+        """
         out = []
         for t in df_values.index:
             for s in df_values.columns:
                 v = df_values.loc[t, s]
-                if np.isfinite(v) and v > 0:
+                a = df_ages.loc[t, s]
+                if np.isfinite(v):
                     out.append({
-                        'Ticker': t,
-                        'Strategy': s,
-                        'Return %': v if side=='bull' else -v,
-                        'Age (d)': df_ages.loc[t, s]
+                        "Ticker": t,
+                        "Strategy": s,
+                        # keep bearish as negative (drop); flip to +v if you prefer short-gain as positive
+                        "Return %": v if side == "bull" else -v,
+                        "Age (d)": a
                     })
         return pd.DataFrame(out)
 
-    bull_long = melt_active(bull_df, ages_df, 'bull')
-    bear_long = melt_active(bear_df, ages_df, 'bear')
+    bull_long = melt_active_filtered(bull_plot, ages_bull, "bull")
+    bear_long = melt_active_filtered(bear_plot, ages_bear, "bear")
 
     cL, cR = st.columns(2)
+
     if not bull_long.empty:
-        bull_top = bull_long.sort_values(['Return %', 'Age (d)'], ascending=[False, True]).head(12)
+        bull_top = bull_long.sort_values(["Return %", "Age (d)"], ascending=[False, True]).head(12)
         cL.subheader("Top Bullish")
         cL.dataframe(bull_top, use_container_width=True, hide_index=True)
     else:
-        cL.info("No bullish signals to rank.")
+        cL.info("No bullish signals to rank (after filters).")
 
     if not bear_long.empty:
-        bear_top = bear_long.sort_values(['Return %', 'Age (d)'], ascending=[True, True]).head(12)
+        bear_top = bear_long.sort_values(["Return %", "Age (d)"], ascending=[True, True]).head(12)
         cR.subheader("Top Bearish")
         cR.dataframe(bear_top, use_container_width=True, hide_index=True)
     else:
-        cR.info("No bearish signals to rank.")
+        cR.info("No bearish signals to rank (after filters).")
 
 # --- CHART ANALYSIS TAB ---
 with tab2:
@@ -627,7 +606,11 @@ with tab2:
                 go.Scatter(x=chart_df.index, y=chart_df['50_MA'], mode='lines', name='50 MA', line=dict(color='blue', width=2)),
                 go.Scatter(x=chart_df.index, y=chart_df['200_MA'], mode='lines', name='200 MA', line=dict(color='red', width=2))
             ])
-            fig_candlestick.update_layout(title=f"{TICKER_NAMES.get(chart_ticker, chart_ticker)} Price Action (Moving Averages)", xaxis_rangeslider_visible=False, legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1))
+            fig_candlestick.update_layout(
+                title=f"{TICKER_NAMES.get(chart_ticker, chart_ticker)} Price Action (Moving Averages)",
+                xaxis_rangeslider_visible=False,
+                legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
+            )
             st.plotly_chart(fig_candlestick, use_container_width=True)
 
             fig_ichimoku = go.Figure(data=[
@@ -635,27 +618,20 @@ with tab2:
                 go.Scatter(x=chart_df.index, y=chart_df['tenkan_sen'], mode='lines', name='Tenkan-sen', line=dict(color='red', width=1)),
                 go.Scatter(x=chart_df.index, y=chart_df['kijun_sen'], mode='lines', name='Kijun-sen', line=dict(color='blue', width=1)),
                 go.Scatter(x=chart_df.index, y=chart_df['chikou_span'], mode='lines', name='Chikou Span', line=dict(color='green', width=1)),
+                go.Scatter(x=chart_df.index, y=chart_df['senkou_span_a'], fill=None, mode='lines', line=dict(color='rgba(0,0,0,0)'), name='Cloud'),
                 go.Scatter(
-                    x=chart_df.index,
-                    y=chart_df['senkou_span_a'],
-                    fill=None,
-                    mode='lines',
+                    x=chart_df.index, y=chart_df['senkou_span_b'], fill='tonexty', mode='lines',
                     line=dict(color='rgba(0,0,0,0)'),
-                    name='Cloud'
-                ),
-                go.Scatter(
-                    x=chart_df.index,
-                    y=chart_df['senkou_span_b'],
-                    fill='tonexty',
-                    mode='lines',
-                    line=dict(color='rgba(0,0,0,0)'),
-                    fillcolor='rgba(255, 0, 0, 0.2)' if chart_df['senkou_span_a'].iloc[-1] > chart_df['senkou_span_b'].iloc[-1] else 'rgba(0, 255, 0, 0.2)',
+                    fillcolor=('rgba(255, 0, 0, 0.2)' if chart_df['senkou_span_a'].iloc[-1] > chart_df['senkou_span_b'].iloc[-1]
+                               else 'rgba(0, 255, 0, 0.2)'),
                     name='Cloud Fill'
                 )
             ])
-
-            fig_ichimoku.update_layout(title=f"{TICKER_NAMES.get(chart_ticker, chart_ticker)} Ichimoku Cloud ({timeframe} interval)", xaxis_rangeslider_visible=False, legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1))
-
+            fig_ichimoku.update_layout(
+                title=f"{TICKER_NAMES.get(chart_ticker, chart_ticker)} Ichimoku Cloud ({timeframe} interval)",
+                xaxis_rangeslider_visible=False,
+                legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
+            )
             st.plotly_chart(fig_ichimoku, use_container_width=True)
         else:
             st.warning(f"⚠️ No data available for {chart_ticker} at the selected timeframe.")
