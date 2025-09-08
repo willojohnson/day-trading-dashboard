@@ -11,6 +11,7 @@ from datetime import timezone
 # Trading Dashboard – Split Heatmaps + Filters + Leaderboards
 # Pre-styling version (reverted), with hover toggle for company names
 # + Last Refresh timestamp & data source caption
+# + Fresh-trigger borders & Data latency badge
 # =============================================================
 
 # --- Tickers to Monitor ---
@@ -45,7 +46,7 @@ st.title("📈 Strategy Heatmap")
 if "last_refresh" not in st.session_state:
     st.session_state.last_refresh = "—"
 
-tab1, tab2 = st.tabs(["Dashboard Overview", "Chart Analysis"]) 
+tab1, tab2 = st.tabs(["Dashboard Overview", "Chart Analysis"])
 
 # --- Sidebar Options ---
 st.sidebar.header("Dashboard Settings")
@@ -93,6 +94,11 @@ COL_ORDER = st.sidebar.selectbox("Sort columns (strategies) by", ["Most triggers
 # --- Hover toggle for company names ---
 SHOW_FULLNAME_HOVER = st.sidebar.toggle("Show company names in hover", value=True)
 
+# --- New: Fresh border + Latency controls ---
+st.sidebar.markdown("### ✨ Visual Accents")
+FRESH_AGE_DAYS = st.sidebar.slider("Fresh border if Age ≤ (days)", 0.5, 7.0, 2.0, 0.5)
+LATENCY_ALERT_MIN = st.sidebar.slider("Latency alert ≥ (minutes, intraday only)", 1, 60, 10)
+
 # --- Collapsible Strategy Definitions Section ---
 with st.sidebar.expander("📘 Strategy Definitions", expanded=False):
     st.markdown("**Trend Trading**: 20MA cross **up** above 50MA (with optional slope filter)")
@@ -128,7 +134,7 @@ def fetch_and_process_data(ticker: str, timeframe: str):
         start_date = end_date - datetime.timedelta(days=365)
     elif timeframe == "5 year":
         start_date = end_date - datetime.timedelta(days=5*365)
-    
+
     if start_date is None:
         return None, "Unsupported timeframe."
 
@@ -169,13 +175,13 @@ def fetch_and_process_data(ticker: str, timeframe: str):
     high_9 = df['High'].rolling(window=9).max()
     low_9 = df['Low'].rolling(window=9).min()
     df['tenkan_sen'] = (high_9 + low_9) / 2
-    
+
     high_26 = df['High'].rolling(window=26).max()
     low_26 = df['Low'].rolling(window=26).min()
     df['kijun_sen'] = (high_26 + low_26) / 2
 
     df['senkou_span_a'] = ((df['tenkan_sen'] + df['kijun_sen']) / 2).shift(26)
-    
+
     high_52 = df['High'].rolling(window=52).max()
     low_52 = df['Low'].rolling(window=52).min()
     df['senkou_span_b'] = ((high_52 + low_52) / 2).shift(26)
@@ -266,12 +272,23 @@ def slope(series: pd.Series, lookback: int = 5):
     if len(series.dropna()) <= lookback: return 0.0
     return float(series.iloc[-1] - series.iloc[-lookback-1])
 
-# ---------- Main logic builds returns + ages + hover ----------
+def _humanize_secs(s: float) -> str:
+    if s is None or not np.isfinite(s): return "—"
+    m, sec = divmod(int(s), 60)
+    h, m = divmod(m, 60)
+    if h: return f"{h}h {m}m"
+    if m: return f"{m}m {sec}s"
+    return f"{sec}s"
+
+# ---------- Main logic builds returns + ages + hover + latency ----------
 
 signals = []
 heatmap_data = {s: np.zeros(len(TICKERS), dtype=float) for s in all_strategies}
 heatmap_age = {s: np.full(len(TICKERS), np.nan) for s in all_strategies}
 heatmap_hover = {s: [""] * len(TICKERS) for s in all_strategies}
+
+# Track worst (maximum) latency across all fetched tickers
+worst_latency_sec = None
 
 with st.spinner("⚙️ Processing data and generating signals..."):
     if selected_strategies:
@@ -283,6 +300,20 @@ with st.spinner("⚙️ Processing data and generating signals..."):
                 continue
             if len(df) < 210:
                 st.info(f"ℹ️ Limited data for {ticker}. Some strategies may not trigger.")
+
+            # --- latency measurement (most recent bar recency) ---
+            try:
+                now = datetime.datetime.now(timezone.utc).astimezone()
+                # yfinance index may be tz-aware or naive; coerce to local tz
+                last_ts = df.index[-1]
+                if last_ts.tzinfo is None:
+                    # assume localize to UTC then convert to local (best-effort)
+                    last_ts = last_ts.replace(tzinfo=timezone.utc).astimezone()
+                latency = (now - last_ts).total_seconds()
+                if (worst_latency_sec is None) or (latency > worst_latency_sec):
+                    worst_latency_sec = latency
+            except Exception:
+                pass
 
             s20 = slope(df['20_MA']); s50 = slope(df['50_MA']); s200 = slope(df['200_MA'])
             macd_ok = True
@@ -392,13 +423,23 @@ hover_df = pd.DataFrame(heatmap_hover, index=TICKERS)
 bull_df = heatmap_df.clip(lower=0)
 bear_df = (-heatmap_df.clip(upper=0)).abs()  # convert to positive intensity for bear view
 
-# --- Header meta (last refresh + source) ---
+# --- Header meta (last refresh + source + latency) ---
 local_ts = datetime.datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
 st.session_state.last_refresh = local_ts
+
+latency_badge = ""
+if timeframe in ["5m", "15m", "30m", "1h"]:
+    # show worst-case latency across tickers
+    h = _humanize_secs(worst_latency_sec) if worst_latency_sec is not None else "—"
+    if worst_latency_sec is not None and worst_latency_sec >= LATENCY_ALERT_MIN * 60:
+        latency_badge = f" • ⚠️ Data latency: {h}"
+    else:
+        latency_badge = f" • ⏱️ Data latency: {h}"
+
 st.caption(
     f"**Last refresh:** {st.session_state.last_refresh}  •  "
     f"**Source:** Yahoo Finance via yfinance (interval driven by timeframe)  •  "
-    f"**Auto-refresh:** every {refresh_rate}s"
+    f"**Auto-refresh:** every {refresh_rate}s{latency_badge}"
 )
 
 # --- DASHBOARD OVERVIEW TAB ---
@@ -465,8 +506,12 @@ with tab1:
         if df_plot.empty:
             st.info("No data to display.")
             return
+
         # Build per-cell hovertext
         hover = []
+        fresh_x = []  # column names for fresh cells
+        fresh_y = []  # row names (tickers) for fresh cells
+
         for r in df_plot.index:
             row = []
             for c in df_plot.columns:
@@ -475,18 +520,44 @@ with tab1:
                 if np.isfinite(val):
                     comp = f"{TICKER_NAMES.get(r, r)}<br>" if SHOW_FULLNAME_HOVER else ""
                     row.append(f"{r} — {c}<br>{comp}Return: {val:.2f}%<br>Age: {age if np.isfinite(age) else '—'}d")
+                    # mark fresh cells (bold border overlay)
+                    if np.isfinite(age) and age <= FRESH_AGE_DAYS:
+                        fresh_x.append(c)
+                        fresh_y.append(r)
                 else:
                     row.append("")
             hover.append(row)
-        fig = go.Figure(go.Heatmap(
+
+        fig = go.Figure()
+
+        # Base heatmap
+        fig.add_trace(go.Heatmap(
             z=df_plot.values,
             x=list(df_plot.columns),
             y=list(df_plot.index),
             colorscale=palette,
             zmin=0, zmax=float(COLOR_CLAMP),
             hoverinfo='text', text=hover,
-            showscale=True, colorbar=dict(title=("Return %" if side=='bull' else "Short Ret %"), ticksuffix="%")
+            showscale=True,
+            colorbar=dict(title=("Return %" if side=='bull' else "Short Ret %"), ticksuffix="%")
         ))
+
+        # Overlay: square markers with transparent fill + visible border to highlight fresh signals
+        if len(fresh_x):
+            fig.add_trace(go.Scatter(
+                x=fresh_x,
+                y=fresh_y,
+                mode="markers",
+                marker=dict(
+                    symbol="square",
+                    size=28,                 # size in px; looks good for typical layout
+                    color="rgba(0,0,0,0)",   # transparent fill
+                    line=dict(color="black", width=2)
+                ),
+                hoverinfo="skip",
+                showlegend=False
+            ))
+
         fig.update_layout(
             title=title,
             xaxis_title="Strategies", yaxis_title="Tickers",
