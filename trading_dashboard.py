@@ -50,7 +50,7 @@ tab1, tab2 = st.tabs(["Dashboard Overview", "Chart Analysis"])
 
 # --- Sidebar Options ---
 st.sidebar.header("Dashboard Settings")
-refresh_rate = st.sidebar.slider("Refresh every N seconds", min_value=10, max_value=300, value=30, step=10)
+refresh_rate = st.sidebar.slider("Refresh every N seconds", min_value=10, max_value=300, value=60, step=10)
 st_autorefresh(interval=refresh_rate * 1000, key="autorefresh")
 
 # --- Interactive Strategy Selectors ---
