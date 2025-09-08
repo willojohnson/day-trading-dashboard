@@ -5,10 +5,12 @@ import datetime
 import plotly.graph_objects as go
 import numpy as np
 from streamlit_autorefresh import st_autorefresh
+from datetime import timezone
 
 # =============================================================
 # Trading Dashboard – Split Heatmaps + Filters + Leaderboards
 # Pre-styling version (reverted), with hover toggle for company names
+# + Last Refresh timestamp & data source caption
 # =============================================================
 
 # --- Tickers to Monitor ---
@@ -38,6 +40,10 @@ TICKER_NAMES = {
 # --- Page Setup ---
 st.set_page_config(layout="wide")
 st.title("📈 Strategy Heatmap")
+
+# Keep a persistent “last refresh” text
+if "last_refresh" not in st.session_state:
+    st.session_state.last_refresh = "—"
 
 tab1, tab2 = st.tabs(["Dashboard Overview", "Chart Analysis"]) 
 
@@ -184,7 +190,6 @@ def _nanmask(a: pd.Series, b: pd.Series):
     m = (~a.isna()) & (~b.isna())
     return a[m].values, b[m].values, np.where(m)[0]
 
-
 def last_cross_index(series_a: pd.Series, series_b: pd.Series, direction: str):
     a, b, posmap = _nanmask(series_a, series_b)
     if len(a) < 2:
@@ -192,7 +197,6 @@ def last_cross_index(series_a: pd.Series, series_b: pd.Series, direction: str):
     cross = (a[:-1] <= b[:-1]) & (a[1:] > b[1:]) if direction == 'up' else (a[:-1] >= b[:-1]) & (a[1:] < b[1:])
     idxs = np.where(cross)[0]
     return int(posmap[idxs[-1] + 1]) if idxs.size else None
-
 
 def last_threshold_cross_index(series: pd.Series, thresh: float, mode: str):
     mask = ~series.isna().values
@@ -210,7 +214,6 @@ def last_threshold_cross_index(series: pd.Series, thresh: float, mode: str):
         cross = (s[:-1] > thresh) & (s[1:] <= thresh)
     idxs = np.where(cross)[0]
     return int(posmap[idxs[-1] + 1]) if idxs.size else None
-
 
 def ichimoku_cross_index(df: pd.DataFrame, direction: str, require_color: bool, require_chikou: bool):
     close = df['Close']; a = df['senkou_span_a']; b = df['senkou_span_b']
@@ -252,14 +255,12 @@ def compute_return_since(df: pd.DataFrame, trigger_idx: int, side: str) -> float
     if entry <= 0 or last <= 0: return 0.0
     return float(((last/entry - 1.0) if side == 'long' else (entry/last - 1.0)) * 100.0)
 
-
 def signal_age_days(df: pd.DataFrame, trigger_idx: int) -> float:
     if trigger_idx is None or trigger_idx >= len(df): return np.nan
     end_ts = df.index[-1]; trig_ts = df.index[trigger_idx]
     delta = (end_ts - trig_ts)
     # Support intraday frequency
     return round(delta.total_seconds() / 86400.0, 2)
-
 
 def slope(series: pd.Series, lookback: int = 5):
     if len(series.dropna()) <= lookback: return 0.0
@@ -390,6 +391,15 @@ hover_df = pd.DataFrame(heatmap_hover, index=TICKERS)
 # Convenience matrices for split views
 bull_df = heatmap_df.clip(lower=0)
 bear_df = (-heatmap_df.clip(upper=0)).abs()  # convert to positive intensity for bear view
+
+# --- Header meta (last refresh + source) ---
+local_ts = datetime.datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
+st.session_state.last_refresh = local_ts
+st.caption(
+    f"**Last refresh:** {st.session_state.last_refresh}  •  "
+    f"**Source:** Yahoo Finance via yfinance (interval driven by timeframe)  •  "
+    f"**Auto-refresh:** every {refresh_rate}s"
+)
 
 # --- DASHBOARD OVERVIEW TAB ---
 with tab1:
