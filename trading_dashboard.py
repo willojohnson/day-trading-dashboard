@@ -11,6 +11,7 @@ from datetime import timezone
 # Trading Dashboard – Split Heatmaps + Filters + Leaderboards
 # + Fresh-trigger borders & Data latency badge
 # + Leaderboards honor sidebar filters (min return, max age, triggered only)
+# + FIX: Bullish/Bearish heatmaps are now strictly separated by strategy side
 # =============================================================
 
 # --- Tickers to Monitor ---
@@ -62,6 +63,10 @@ all_bearish_strategies = [
     "Death Cross + RSI Bearish", "Ichimoku Bearish"
 ]
 all_strategies = all_bullish_strategies + all_bearish_strategies
+
+# --- FIX: explicit strategy->side map (used to separate heatmaps/leaderboards) ---
+STRATEGY_SIDE = {s: "bull" for s in all_bullish_strategies}
+STRATEGY_SIDE.update({s: "bear" for s in all_bearish_strategies})
 
 st.sidebar.markdown("### 🚦 Select Strategies")
 selected_bullish = st.sidebar.multiselect("Bullish Strategies", all_bullish_strategies, default=all_bullish_strategies)
@@ -403,9 +408,19 @@ with st.spinner("⚙️ Processing data and generating signals..."):
 heatmap_df = pd.DataFrame(heatmap_data, index=TICKERS)
 ages_df = pd.DataFrame(heatmap_age, index=TICKERS)
 
-# Convenience matrices for split views
-bull_df = heatmap_df.clip(lower=0)
-bear_df = (-heatmap_df.clip(upper=0)).abs()  # convert to positive intensity for bear view
+# --- FIX: Split columns by side and by user selection before any plotting ---
+bull_cols = [s for s in selected_bullish if STRATEGY_SIDE.get(s) == "bull"]
+bear_cols = [s for s in selected_bearish if STRATEGY_SIDE.get(s) == "bear"]
+
+# Subset to side-appropriate columns only
+heatmap_bull = heatmap_df.loc[:, bull_cols] if bull_cols else pd.DataFrame(index=TICKERS)
+heatmap_bear = heatmap_df.loc[:, bear_cols] if bear_cols else pd.DataFrame(index=TICKERS)
+ages_bull_all = ages_df.loc[:, bull_cols] if bull_cols else pd.DataFrame(index=TICKERS)
+ages_bear_all = ages_df.loc[:, bear_cols] if bear_cols else pd.DataFrame(index=TICKERS)
+
+# Convenience matrices for split views (apply sign logic after column split)
+bull_df = heatmap_bull.clip(lower=0)
+bear_df = (-heatmap_bear.clip(upper=0)).abs()  # convert to positive intensity for bear view
 
 # --- Header meta (last refresh + source + latency) ---
 local_ts = datetime.datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
@@ -428,7 +443,8 @@ st.caption(
 # --- DASHBOARD OVERVIEW TAB ---
 with tab1:
     # Summary strip
-    total_bull = int((bull_df > 0).sum().sum()); total_bear = int((bear_df > 0).sum().sum())
+    total_bull = int((bull_df > 0).sum().sum()) if not bull_df.empty else 0
+    total_bear = int((bear_df > 0).sum().sum()) if not bear_df.empty else 0
     c1, c2, _ = st.columns([1,1,2])
     c1.success(f"Bullish: {total_bull} active cells")
     c2.error(f"Bearish: {total_bear} active cells")
@@ -442,20 +458,24 @@ with tab1:
 
     # Filtering masks (applied to matrices used by both heatmaps and leaderboards)
     def filter_matrix(values: pd.DataFrame, ages: pd.DataFrame, min_ret: float, max_age: int, triggered_only: bool):
+        if values.empty:
+            return values
         Z = values.copy()
         A = ages.reindex_like(values)
-        Z = Z.where(Z >= min_ret, np.nan)                     # min return
-        Z = Z.where((A <= max_age) | (~np.isfinite(A)), np.nan)  # max age
+        Z = Z.where(Z >= min_ret, np.nan)                         # min return
+        Z = Z.where((A <= max_age) | (~np.isfinite(A)), np.nan)   # max age
         if triggered_only:
-            Z = Z.where(np.isfinite(Z))                       # hide non-triggered
+            Z = Z.where(np.isfinite(Z))                           # hide non-triggered
         return Z
 
     # Apply filter to both sides
-    bull_plot = filter_matrix(bull_df, ages_df, min_ret_local, max_age_local, triggered_only_local)
-    bear_plot = filter_matrix(bear_df, ages_df, min_ret_local, max_age_local, triggered_only_local)
+    bull_plot = filter_matrix(bull_df, ages_bull_all, min_ret_local, max_age_local, triggered_only_local)
+    bear_plot = filter_matrix(bear_df, ages_bear_all, min_ret_local, max_age_local, triggered_only_local)
 
     # Ordering helpers
     def order_rows(df_plot: pd.DataFrame, ages: pd.DataFrame, how: str):
+        if df_plot.empty:
+            return df_plot, ages
         if how == "Best return":
             score = df_plot.max(axis=1).fillna(0)
             idx = score.sort_values(ascending=False).index
@@ -467,6 +487,8 @@ with tab1:
         return df_plot.sort_index(), ages.sort_index()
 
     def order_cols(df_plot: pd.DataFrame, ages: pd.DataFrame, how: str):
+        if df_plot.empty:
+            return df_plot, ages
         if how == "Most triggers":
             score = (np.isfinite(df_plot)).sum(axis=0)
             cols = score.sort_values(ascending=False).index
@@ -482,15 +504,15 @@ with tab1:
         return df_plot, ages
 
     # Apply ordering
-    bull_plot, ages_bull = order_rows(bull_plot, ages_df, ROW_ORDER)
+    bull_plot, ages_bull = order_rows(bull_plot, ages_bull_all, ROW_ORDER)
     bull_plot, ages_bull = order_cols(bull_plot, ages_bull, COL_ORDER)
-    bear_plot, ages_bear = order_rows(bear_plot, ages_df, ROW_ORDER)
+    bear_plot, ages_bear = order_rows(bear_plot, ages_bear_all, ROW_ORDER)
     bear_plot, ages_bear = order_cols(bear_plot, ages_bear, COL_ORDER)
 
     col_bull, col_bear = st.columns(2)
 
     def render_heatmap(df_plot: pd.DataFrame, ages_plot: pd.DataFrame, title: str, palette: str, side: str):
-        if df_plot.empty:
+        if df_plot.empty or len(df_plot.columns) == 0:
             st.info("No data to display.")
             return
 
@@ -556,6 +578,8 @@ with tab1:
         Honors Min Return %, Max Age, and Show triggered only.
         """
         out = []
+        if df_values.empty:
+            return pd.DataFrame(out)
         for t in df_values.index:
             for s in df_values.columns:
                 v = df_values.loc[t, s]
