@@ -17,7 +17,7 @@ from datetime import timezone
 # --- Tickers to Monitor ---
 TICKERS = [
     "NVDA", "AMZN", "META", "TSLA", "SNOW", "AI",
-    "AMD", "BBAI", "SOUN", "CRSP", "TSM", "DDOG", "BTSG", "ARDX"
+    "AMD", "BBAI", "SOUN", "CRSP", "TSM", "DDOG", "BTSG", "ARDX", "PONY"
 ]
 
 # --- Ticker to Company Name Mapping ---
