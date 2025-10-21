@@ -16,7 +16,7 @@ from datetime import timezone
 
 # --- Tickers to Monitor ---
 TICKERS = [
-    "NVDA", "AMZN", "META", "TSLA", "SNOW", "AI",
+    "NVDA", "CRSP","PONY", "TSLA", "SNOW", "AI",
     "AMD", "BBAI", "SOUN", "CRSP", "TSM", "DDOG", "BTSG", "ARDX"
 ]
 
