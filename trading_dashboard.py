@@ -11,12 +11,12 @@ from datetime import timezone
 # Trading Dashboard – Split Heatmaps + Filters + Leaderboards
 # + Fresh-trigger borders & Data latency badge
 # + Leaderboards honor sidebar filters (min return, max age, triggered only)
-# + FIX: Bullish/Bearish heatmaps are now strictly separated by strategy side
+# + Heatmap robust to duplicate labels / non-scalar lookups
 # =============================================================
 
 # --- Tickers to Monitor ---
 TICKERS = [
-    "NVDA", "CRSP","PONY", "TSLA", "SNOW", "AI",
+    "NVDA", "AMZN", "META", "TSLA", "SNOW", "AI",
     "AMD", "BBAI", "SOUN", "CRSP", "TSM", "DDOG", "BTSG", "ARDX"
 ]
 
@@ -42,7 +42,6 @@ TICKER_NAMES = {
 st.set_page_config(layout="wide")
 st.title("📈 Strategy Heatmap")
 
-# Keep a persistent “last refresh” text
 if "last_refresh" not in st.session_state:
     st.session_state.last_refresh = "—"
 
@@ -63,10 +62,6 @@ all_bearish_strategies = [
     "Death Cross + RSI Bearish", "Ichimoku Bearish"
 ]
 all_strategies = all_bullish_strategies + all_bearish_strategies
-
-# --- FIX: explicit strategy->side map (used to separate heatmaps/leaderboards) ---
-STRATEGY_SIDE = {s: "bull" for s in all_bullish_strategies}
-STRATEGY_SIDE.update({s: "bear" for s in all_bearish_strategies})
 
 st.sidebar.markdown("### 🚦 Select Strategies")
 selected_bullish = st.sidebar.multiselect("Bullish Strategies", all_bullish_strategies, default=all_bullish_strategies)
@@ -98,12 +93,12 @@ COL_ORDER = st.sidebar.selectbox("Sort columns (strategies) by", ["Most triggers
 # --- Hover toggle for company names ---
 SHOW_FULLNAME_HOVER = st.sidebar.toggle("Show company names in hover", value=True)
 
-# --- New: Fresh border + Latency controls ---
+# --- Visual Accents ---
 st.sidebar.markdown("### ✨ Visual Accents")
 FRESH_AGE_DAYS = st.sidebar.slider("Fresh border if Age ≤ (days)", 0.5, 7.0, 2.0, 0.5)
 LATENCY_ALERT_MIN = st.sidebar.slider("Latency alert ≥ (minutes, intraday only)", 1, 60, 10)
 
-# --- Collapsible Strategy Definitions Section ---
+# --- Strategy Definitions ---
 with st.sidebar.expander("📘 Strategy Definitions", expanded=False):
     st.markdown("**Trend Trading**: 20MA cross **up** above 50MA (with optional slope filter)")
     st.markdown("**RSI Oversold (Re-entry)**: RSI crosses **up** back above 30")
@@ -202,8 +197,7 @@ def _nanmask(a: pd.Series, b: pd.Series):
 
 def last_cross_index(series_a: pd.Series, series_b: pd.Series, direction: str):
     a, b, posmap = _nanmask(series_a, series_b)
-    if len(a) < 2:
-        return None
+    if len(a) < 2: return None
     cross = (a[:-1] <= b[:-1]) & (a[1:] > b[1:]) if direction == 'up' else (a[:-1] >= b[:-1]) & (a[1:] < b[1:])
     idxs = np.where(cross)[0]
     return int(posmap[idxs[-1] + 1]) if idxs.size else None
@@ -211,8 +205,7 @@ def last_cross_index(series_a: pd.Series, series_b: pd.Series, direction: str):
 def last_threshold_cross_index(series: pd.Series, thresh: float, mode: str):
     mask = ~series.isna().values
     s = series.values[mask]
-    if len(s) < 2:
-        return None
+    if len(s) < 2: return None
     posmap = np.where(mask)[0]
     if mode == 'breach_down':
         cross = (s[:-1] >= thresh) & (s[1:] < thresh)
@@ -229,8 +222,7 @@ def ichimoku_cross_index(df: pd.DataFrame, direction: str, require_color: bool, 
     close = df['Close']; a = df['senkou_span_a']; b = df['senkou_span_b']
     valid = (~close.isna()) & (~a.isna()) & (~b.isna())
     valid_np = valid.to_numpy() if hasattr(valid, 'to_numpy') else np.asarray(valid)
-    if valid_np.sum() < 2:
-        return None
+    if valid_np.sum() < 2: return None
     c = close.values[valid_np]; A = a.values[valid_np]; B = b.values[valid_np]
     posmap = np.where(valid_np)[0]
 
@@ -241,8 +233,7 @@ def ichimoku_cross_index(df: pd.DataFrame, direction: str, require_color: bool, 
             else (c[:-1] >= cloud_bot_prev) & (c[1:] < cloud_bot_now)
 
     idxs = np.where(cross)[0]
-    if not idxs.size:
-        return None
+    if not idxs.size: return None
 
     for k in idxs[::-1]:
         pos = int(posmap[k + 1])
@@ -290,7 +281,6 @@ heatmap_data = {s: np.zeros(len(TICKERS), dtype=float) for s in all_strategies}
 heatmap_age = {s: np.full(len(TICKERS), np.nan) for s in all_strategies}
 heatmap_hover = {s: [""] * len(TICKERS) for s in all_strategies}
 
-# Track worst (maximum) latency across all fetched tickers
 worst_latency_sec = None
 
 with st.spinner("⚙️ Processing data and generating signals..."):
@@ -408,19 +398,9 @@ with st.spinner("⚙️ Processing data and generating signals..."):
 heatmap_df = pd.DataFrame(heatmap_data, index=TICKERS)
 ages_df = pd.DataFrame(heatmap_age, index=TICKERS)
 
-# --- FIX: Split columns by side and by user selection before any plotting ---
-bull_cols = [s for s in selected_bullish if STRATEGY_SIDE.get(s) == "bull"]
-bear_cols = [s for s in selected_bearish if STRATEGY_SIDE.get(s) == "bear"]
-
-# Subset to side-appropriate columns only
-heatmap_bull = heatmap_df.loc[:, bull_cols] if bull_cols else pd.DataFrame(index=TICKERS)
-heatmap_bear = heatmap_df.loc[:, bear_cols] if bear_cols else pd.DataFrame(index=TICKERS)
-ages_bull_all = ages_df.loc[:, bull_cols] if bull_cols else pd.DataFrame(index=TICKERS)
-ages_bear_all = ages_df.loc[:, bear_cols] if bear_cols else pd.DataFrame(index=TICKERS)
-
-# Convenience matrices for split views (apply sign logic after column split)
-bull_df = heatmap_bull.clip(lower=0)
-bear_df = (-heatmap_bear.clip(upper=0)).abs()  # convert to positive intensity for bear view
+# Convenience matrices for split views
+bull_df = heatmap_df.clip(lower=0)
+bear_df = (-heatmap_df.clip(upper=0)).abs()  # convert to positive intensity for bear view
 
 # --- Header meta (last refresh + source + latency) ---
 local_ts = datetime.datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
@@ -443,8 +423,7 @@ st.caption(
 # --- DASHBOARD OVERVIEW TAB ---
 with tab1:
     # Summary strip
-    total_bull = int((bull_df > 0).sum().sum()) if not bull_df.empty else 0
-    total_bear = int((bear_df > 0).sum().sum()) if not bear_df.empty else 0
+    total_bull = int((bull_df > 0).sum().sum()); total_bear = int((bear_df > 0).sum().sum())
     c1, c2, _ = st.columns([1,1,2])
     c1.success(f"Bullish: {total_bull} active cells")
     c2.error(f"Bearish: {total_bear} active cells")
@@ -458,24 +437,20 @@ with tab1:
 
     # Filtering masks (applied to matrices used by both heatmaps and leaderboards)
     def filter_matrix(values: pd.DataFrame, ages: pd.DataFrame, min_ret: float, max_age: int, triggered_only: bool):
-        if values.empty:
-            return values
         Z = values.copy()
         A = ages.reindex_like(values)
-        Z = Z.where(Z >= min_ret, np.nan)                         # min return
-        Z = Z.where((A <= max_age) | (~np.isfinite(A)), np.nan)   # max age
+        Z = Z.where(Z >= min_ret, np.nan)                        # min return
+        Z = Z.where((A <= max_age) | (~np.isfinite(A)), np.nan)  # max age
         if triggered_only:
-            Z = Z.where(np.isfinite(Z))                           # hide non-triggered
+            Z = Z.where(np.isfinite(Z))                          # hide non-triggered
         return Z
 
     # Apply filter to both sides
-    bull_plot = filter_matrix(bull_df, ages_bull_all, min_ret_local, max_age_local, triggered_only_local)
-    bear_plot = filter_matrix(bear_df, ages_bear_all, min_ret_local, max_age_local, triggered_only_local)
+    bull_plot = filter_matrix(bull_df, ages_df, min_ret_local, max_age_local, triggered_only_local)
+    bear_plot = filter_matrix(bear_df, ages_df, min_ret_local, max_age_local, triggered_only_local)
 
     # Ordering helpers
     def order_rows(df_plot: pd.DataFrame, ages: pd.DataFrame, how: str):
-        if df_plot.empty:
-            return df_plot, ages
         if how == "Best return":
             score = df_plot.max(axis=1).fillna(0)
             idx = score.sort_values(ascending=False).index
@@ -487,8 +462,6 @@ with tab1:
         return df_plot.sort_index(), ages.sort_index()
 
     def order_cols(df_plot: pd.DataFrame, ages: pd.DataFrame, how: str):
-        if df_plot.empty:
-            return df_plot, ages
         if how == "Most triggers":
             score = (np.isfinite(df_plot)).sum(axis=0)
             cols = score.sort_values(ascending=False).index
@@ -504,25 +477,41 @@ with tab1:
         return df_plot, ages
 
     # Apply ordering
-    bull_plot, ages_bull = order_rows(bull_plot, ages_bull_all, ROW_ORDER)
+    bull_plot, ages_bull = order_rows(bull_plot, ages_df, ROW_ORDER)
     bull_plot, ages_bull = order_cols(bull_plot, ages_bull, COL_ORDER)
-    bear_plot, ages_bear = order_rows(bear_plot, ages_bear_all, ROW_ORDER)
+    bear_plot, ages_bear = order_rows(bear_plot, ages_df, ROW_ORDER)
     bear_plot, ages_bear = order_cols(bear_plot, ages_bear, COL_ORDER)
 
     col_bull, col_bear = st.columns(2)
 
+    # --------- SAFE HEATMAP RENDERER (scalarizes lookups) ----------
     def render_heatmap(df_plot: pd.DataFrame, ages_plot: pd.DataFrame, title: str, palette: str, side: str):
-        if df_plot.empty or len(df_plot.columns) == 0:
+        if df_plot.empty:
             st.info("No data to display.")
             return
+
+        def _to_scalar(x):
+            """Return a float scalar or np.nan from a pandas object (Series/DataFrame/scalar)."""
+            if isinstance(x, pd.DataFrame):
+                return float(x.values.ravel()[0]) if x.size else np.nan
+            if isinstance(x, pd.Series):
+                return float(x.values[0]) if x.size else np.nan
+            try:
+                return float(x)
+            except Exception:
+                return np.nan
 
         # Build per-cell hovertext and find 'fresh' cells for border overlay
         hover, fresh_x, fresh_y = [], [], []
         for r in df_plot.index:
             row = []
             for c in df_plot.columns:
-                val = df_plot.loc[r, c]
-                age = ages_plot.loc[r, c]
+                val_raw = df_plot.loc[r, c]
+                age_raw = ages_plot.loc[r, c] if (r in ages_plot.index and c in ages_plot.columns) else np.nan
+
+                val = _to_scalar(val_raw)
+                age = _to_scalar(age_raw)
+
                 if np.isfinite(val):
                     comp = f"{TICKER_NAMES.get(r, r)}<br>" if SHOW_FULLNAME_HOVER else ""
                     row.append(f"{r} — {c}<br>{comp}Return: {val:.2f}%<br>Age: {age if np.isfinite(age) else '—'}d")
@@ -549,7 +538,8 @@ with tab1:
         if len(fresh_x):
             fig.add_trace(go.Scatter(
                 x=fresh_x, y=fresh_y, mode="markers",
-                marker=dict(symbol="square", size=28, color="rgba(0,0,0,0)", line=dict(color="black", width=2)),
+                marker=dict(symbol="square", size=28, color="rgba(0,0,0,0)",
+                            line=dict(color="black", width=2)),
                 hoverinfo="skip", showlegend=False
             ))
 
@@ -578,8 +568,6 @@ with tab1:
         Honors Min Return %, Max Age, and Show triggered only.
         """
         out = []
-        if df_values.empty:
-            return pd.DataFrame(out)
         for t in df_values.index:
             for s in df_values.columns:
                 v = df_values.loc[t, s]
@@ -588,7 +576,7 @@ with tab1:
                     out.append({
                         "Ticker": t,
                         "Strategy": s,
-                        # keep bearish as negative (drop); flip to +v if you prefer short-gain as positive
+                        # Bearish shown as negative (drop). Change to +v if you'd rather see short gain positive.
                         "Return %": v if side == "bull" else -v,
                         "Age (d)": a
                     })
@@ -625,10 +613,14 @@ with tab2:
         chart_df, error_msg = fetch_wrap(chart_ticker)
         if chart_df is not None and not chart_df.empty:
             fig_candlestick = go.Figure(data=[
-                go.Candlestick(x=chart_df.index, open=chart_df['Open'], high=chart_df['High'], low=chart_df['Low'], close=chart_df['Close'], name='Price'),
-                go.Scatter(x=chart_df.index, y=chart_df['20_MA'], mode='lines', name='20 MA', line=dict(color='orange', width=2)),
-                go.Scatter(x=chart_df.index, y=chart_df['50_MA'], mode='lines', name='50 MA', line=dict(color='blue', width=2)),
-                go.Scatter(x=chart_df.index, y=chart_df['200_MA'], mode='lines', name='200 MA', line=dict(color='red', width=2))
+                go.Candlestick(x=chart_df.index, open=chart_df['Open'], high=chart_df['High'],
+                               low=chart_df['Low'], close=chart_df['Close'], name='Price'),
+                go.Scatter(x=chart_df.index, y=chart_df['20_MA'], mode='lines', name='20 MA',
+                           line=dict(color='orange', width=2)),
+                go.Scatter(x=chart_df.index, y=chart_df['50_MA'], mode='lines', name='50 MA',
+                           line=dict(color='blue', width=2)),
+                go.Scatter(x=chart_df.index, y=chart_df['200_MA'], mode='lines', name='200 MA',
+                           line=dict(color='red', width=2))
             ])
             fig_candlestick.update_layout(
                 title=f"{TICKER_NAMES.get(chart_ticker, chart_ticker)} Price Action (Moving Averages)",
@@ -638,11 +630,16 @@ with tab2:
             st.plotly_chart(fig_candlestick, use_container_width=True)
 
             fig_ichimoku = go.Figure(data=[
-                go.Candlestick(x=chart_df.index, open=chart_df['Open'], high=chart_df['High'], low=chart_df['Low'], close=chart_df['Close'], name='Price'),
-                go.Scatter(x=chart_df.index, y=chart_df['tenkan_sen'], mode='lines', name='Tenkan-sen', line=dict(color='red', width=1)),
-                go.Scatter(x=chart_df.index, y=chart_df['kijun_sen'], mode='lines', name='Kijun-sen', line=dict(color='blue', width=1)),
-                go.Scatter(x=chart_df.index, y=chart_df['chikou_span'], mode='lines', name='Chikou Span', line=dict(color='green', width=1)),
-                go.Scatter(x=chart_df.index, y=chart_df['senkou_span_a'], fill=None, mode='lines', line=dict(color='rgba(0,0,0,0)'), name='Cloud'),
+                go.Candlestick(x=chart_df.index, open=chart_df['Open'], high=chart_df['High'],
+                               low=chart_df['Low'], close=chart_df['Close'], name='Price'),
+                go.Scatter(x=chart_df.index, y=chart_df['tenkan_sen'], mode='lines', name='Tenkan-sen',
+                           line=dict(color='red', width=1)),
+                go.Scatter(x=chart_df.index, y=chart_df['kijun_sen'], mode='lines', name='Kijun-sen',
+                           line=dict(color='blue', width=1)),
+                go.Scatter(x=chart_df.index, y=chart_df['chikou_span'], mode='lines', name='Chikou Span',
+                           line=dict(color='green', width=1)),
+                go.Scatter(x=chart_df.index, y=chart_df['senkou_span_a'], fill=None, mode='lines',
+                           line=dict(color='rgba(0,0,0,0)'), name='Cloud'),
                 go.Scatter(
                     x=chart_df.index, y=chart_df['senkou_span_b'], fill='tonexty', mode='lines',
                     line=dict(color='rgba(0,0,0,0)'),
